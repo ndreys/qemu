@@ -21,4 +21,5 @@ obj-$(CONFIG_ASPEED_SOC) += aspeed_soc.o aspeed.o
 obj-$(CONFIG_MPS2) += mps2.o
 obj-$(CONFIG_MSF2) += msf2-soc.o msf2-som.o
 obj-$(CONFIG_FSL_IMX7) += fsl-imx7.o
+obj-$(CONFIG_FSL_IMX7) += fsl-imx7.o mcimx7d-sabre.o
 
