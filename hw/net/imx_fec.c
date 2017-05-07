@@ -198,13 +198,13 @@ static const char *imx_eth_reg_name(IMXFECState *s, uint32_t index)
 
 static const VMStateDescription vmstate_imx_eth = {
     .name = TYPE_IMX_FEC,
-    .version_id = 2,
-    .minimum_version_id = 2,
+    .version_id = 3,
+    .minimum_version_id = 3,
     .fields = (VMStateField[]) {
         VMSTATE_UINT32_ARRAY(regs, IMXFECState, ENET_MAX),
         VMSTATE_UINT32(rx_descriptor, IMXFECState),
-        VMSTATE_UINT32(tx_descriptor, IMXFECState),
-
+        VMSTATE_UINT32_ARRAY(tx_descriptor, IMXFECState, ENET_TX_RING_NUM),
+        VMSTATE_UINT32(tx_ring_num, IMXFECState),
         VMSTATE_UINT32(phy_status, IMXFECState),
         VMSTATE_UINT32(phy_control, IMXFECState),
         VMSTATE_UINT32(phy_advertise, IMXFECState),
@@ -407,7 +407,7 @@ static void imx_fec_do_tx(IMXFECState *s)
     int frame_size = 0, descnt = 0;
     uint8_t frame[ENET_MAX_FRAME_SIZE];
     uint8_t *ptr = frame;
-    uint32_t addr = s->tx_descriptor;
+    uint32_t addr = s->tx_descriptor[0];
 
     while (descnt++ < IMX_MAX_DESC) {
         IMXFECBufDesc bd;
@@ -448,17 +448,47 @@ static void imx_fec_do_tx(IMXFECState *s)
         }
     }
 
-    s->tx_descriptor = addr;
+    s->tx_descriptor[0] = addr;
 
     imx_eth_update(s);
 }
 
-static void imx_enet_do_tx(IMXFECState *s)
+static void imx_enet_do_tx(IMXFECState *s, uint32_t index)
 {
     int frame_size = 0, descnt = 0;
     uint8_t frame[ENET_MAX_FRAME_SIZE];
     uint8_t *ptr = frame;
-    uint32_t addr = s->tx_descriptor;
+    uint32_t addr, int_txb, int_txf, tdsr;
+    size_t ring;
+
+    switch (index) {
+    case ENET_TDAR:
+        ring    = 0;
+        int_txb = ENET_INT_TXB;
+        int_txf = ENET_INT_TXF;
+        tdsr    = ENET_TDSR;
+        break;
+    case ENET_TDAR1:
+        ring    = 1;
+        int_txb = ENET_INT_TXB1;
+        int_txf = ENET_INT_TXF1;
+        tdsr    = ENET_TDSR1;
+        break;
+    case ENET_TDAR2:
+        ring    = 2;
+        int_txb = ENET_INT_TXB2;
+        int_txf = ENET_INT_TXF2;
+        tdsr    = ENET_TDSR2;
+        break;
+    default:
+        qemu_log_mask(LOG_GUEST_ERROR,
+                      "%s: bogus value for index %x\n",
+                      __func__, index);
+        abort();
+        break;
+    }
+
+    addr = s->tx_descriptor[ring];
 
     while (descnt++ < IMX_MAX_DESC) {
         IMXENETBufDesc bd;
@@ -502,32 +532,32 @@ static void imx_enet_do_tx(IMXFECState *s)
             ptr = frame;
             frame_size = 0;
             if (bd.option & ENET_BD_TX_INT) {
-                s->regs[ENET_EIR] |= ENET_INT_TXF;
+                s->regs[ENET_EIR] |= int_txf;
             }
         }
         if (bd.option & ENET_BD_TX_INT) {
-            s->regs[ENET_EIR] |= ENET_INT_TXB;
+            s->regs[ENET_EIR] |= int_txb;
         }
         bd.flags &= ~ENET_BD_R;
         /* Write back the modified descriptor.  */
         imx_enet_write_bd(&bd, addr);
         /* Advance to the next descriptor.  */
         if ((bd.flags & ENET_BD_W) != 0) {
-            addr = s->regs[ENET_TDSR];
+            addr = s->regs[tdsr];
         } else {
             addr += sizeof(bd);
         }
     }
 
-    s->tx_descriptor = addr;
+    s->tx_descriptor[ring] = addr;
 
     imx_eth_update(s);
 }
 
-static void imx_eth_do_tx(IMXFECState *s)
+static void imx_eth_do_tx(IMXFECState *s, uint32_t index)
 {
     if (!s->is_fec && (s->regs[ENET_ECR] & ENET_ECR_EN1588)) {
-        imx_enet_do_tx(s);
+        imx_enet_do_tx(s, index);
     } else {
         imx_fec_do_tx(s);
     }
@@ -585,7 +615,7 @@ static void imx_eth_reset(DeviceState *d)
     }
 
     s->rx_descriptor = 0;
-    s->tx_descriptor = 0;
+    memset(s->tx_descriptor, 0, sizeof(s->tx_descriptor));
 
     /* We also reset the PHY */
     phy_reset(s);
@@ -791,6 +821,7 @@ static void imx_eth_write(void *opaque, hwaddr offset, uint64_t value,
                            unsigned size)
 {
     IMXFECState *s = IMX_FEC(opaque);
+    const bool single_tx_ring = s->tx_ring_num != 3;
     uint32_t index = offset >> 2;
 
     FEC_PRINTF("reg[%s] <= 0x%" PRIx32 "\n", imx_eth_reg_name(s, index),
@@ -813,10 +844,18 @@ static void imx_eth_write(void *opaque, hwaddr offset, uint64_t value,
             s->regs[index] = 0;
         }
         break;
-    case ENET_TDAR:
+    case ENET_TDAR1:    /* FALLTHROUGH */
+    case ENET_TDAR2:    /* FALLTHROUGH */
+        if (unlikely(single_tx_ring)) {
+            qemu_log_mask(LOG_GUEST_ERROR,
+                          "[%s]%s: trying to access TDAR2 or TDAR1\n",
+                          TYPE_IMX_FEC, __func__);
+            return;
+        }
+    case ENET_TDAR:     /* FALLTHROUGH */
         if (s->regs[ENET_ECR] & ENET_ECR_ETHEREN) {
             s->regs[index] = ENET_TDAR_TDAR;
-            imx_eth_do_tx(s);
+            imx_eth_do_tx(s, index);
         }
         s->regs[index] = 0;
         break;
@@ -828,8 +867,12 @@ static void imx_eth_write(void *opaque, hwaddr offset, uint64_t value,
         if ((s->regs[index] & ENET_ECR_ETHEREN) == 0) {
             s->regs[ENET_RDAR] = 0;
             s->rx_descriptor = s->regs[ENET_RDSR];
-            s->regs[ENET_TDAR] = 0;
-            s->tx_descriptor = s->regs[ENET_TDSR];
+            s->regs[ENET_TDAR]  = 0;
+            s->regs[ENET_TDAR1] = 0;
+            s->regs[ENET_TDAR2] = 0;
+            s->tx_descriptor[0] = s->regs[ENET_TDSR];
+            s->tx_descriptor[1] = s->regs[ENET_TDSR1];
+            s->tx_descriptor[2] = s->regs[ENET_TDSR2];
         }
         break;
     case ENET_MMFR:
@@ -907,7 +950,29 @@ static void imx_eth_write(void *opaque, hwaddr offset, uint64_t value,
         } else {
             s->regs[index] = value & ~7;
         }
-        s->tx_descriptor = s->regs[index];
+        s->tx_descriptor[0] = s->regs[index];
+        break;
+    case ENET_TDSR1:
+        if (unlikely(single_tx_ring)) {
+            qemu_log_mask(LOG_GUEST_ERROR,
+                          "[%s]%s: trying to access TDSR1\n",
+                          TYPE_IMX_FEC, __func__);
+            return;
+        }
+
+        s->regs[index] = value & ~7;
+        s->tx_descriptor[1] = s->regs[index];
+        break;
+    case ENET_TDSR2:
+        if (unlikely(single_tx_ring)) {
+            qemu_log_mask(LOG_GUEST_ERROR,
+                          "[%s]%s: trying to access TDSR2\n",
+                          TYPE_IMX_FEC, __func__);
+            return;
+        }
+
+        s->regs[index] = value & ~7;
+        s->tx_descriptor[2] = s->regs[index];
         break;
     case ENET_MRBR:
         s->regs[index] = value & 0x00003ff0;
@@ -1203,6 +1268,7 @@ static void imx_eth_realize(DeviceState *dev, Error **errp)
 
 static Property imx_eth_properties[] = {
     DEFINE_NIC_PROPERTIES(IMXFECState, conf),
+    DEFINE_PROP_UINT32("tx-ring-num", IMXFECState, tx_ring_num, 1),
     DEFINE_PROP_END_OF_LIST(),
 };
 
