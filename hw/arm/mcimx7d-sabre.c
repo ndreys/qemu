@@ -40,6 +40,10 @@ static void mcimx7d_sabre_init(MachineState *machine)
     static struct arm_boot_info boot_info;
     MCIMX7Sabre *s = g_new0(MCIMX7Sabre, 1);
     Object *soc;
+    int i;
+    DeviceState *carddev;
+    DriveInfo *di;
+    BlockBackend *blk;
 
     /* Check the amount of memory is compatible with the SOC */
     if (machine->ram_size > FSL_IMX7_MMDC_SIZE) {
@@ -73,6 +77,17 @@ static void mcimx7d_sabre_init(MachineState *machine)
                                          machine->ram_size);
     memory_region_add_subregion(get_system_memory(),
                                 FSL_IMX7_MMDC_ADDR, &s->ram);
+
+    for (i = 0; i < FSL_IMX7_NUM_USDHCS; i++) {
+        di = drive_get_next(IF_SD);
+
+        blk = di ? blk_by_legacy_dinfo(di) : NULL;
+        carddev = qdev_create(qdev_get_child_bus(DEVICE(&s->soc.usdhc[i]),
+                                                 "sd-bus"), TYPE_SD_CARD);
+        qdev_prop_set_drive(carddev, "drive", blk, &error_fatal);
+        object_property_set_bool(OBJECT(carddev), true, "realized", &error_fatal);
+    }
+
     if (!qtest_enabled()) {
         arm_load_kernel(&s->soc.cpu[0], &boot_info);
     }
