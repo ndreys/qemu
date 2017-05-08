@@ -91,6 +91,18 @@ struct IMX7IPBlock {
         .connect_irq = fsl_imx7_enet_connect_irq,    \
     }
 
+#define IMX7_IP_BLOCK_USDHC(s, i)                    \
+    {                                                \
+        .index       = i - 1,                        \
+        .instance    = &s->usdhc[i - 1],             \
+        .size        = sizeof(s->usdhc[i - 1]),      \
+        .name        = "usdhc" #i,                   \
+        .type        = TYPE_SYSBUS_SDHCI,            \
+        .addr        = FSL_IMX7_USDHC##i##_ADDR,     \
+        .irq         = FSL_IMX7_USDHC##i##_IRQ,      \
+        .connect_irq = fsl_imx7_generic_connect_irq, \
+    }
+
 #define IMX7_SOC_BLOCKS(s)          \
     IMX7_IP_BLOCK_MPCORE(s),        \
                                     \
@@ -105,7 +117,11 @@ struct IMX7IPBlock {
     IMX7_IP_BLOCK_UART(s, 7),       \
                                     \
     IMX7_IP_BLOCK_ETH(s, 1),        \
-    IMX7_IP_BLOCK_ETH(s, 2)
+    IMX7_IP_BLOCK_ETH(s, 2),        \
+                                    \
+    IMX7_IP_BLOCK_USDHC(s, 1),      \
+    IMX7_IP_BLOCK_USDHC(s, 2),      \
+    IMX7_IP_BLOCK_USDHC(s, 3),
 
 static void fsl_imx7_generic_connect_irq(const IMX7IPBlock *b, FslIMX7State *s)
 {

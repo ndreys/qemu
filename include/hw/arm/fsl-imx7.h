@@ -41,6 +41,7 @@ enum FslIMX7Configuration {
     FSL_IMX7_NUM_CPUS  = 2,
     FSL_IMX7_NUM_UARTS = 7,
     FSL_IMX7_NUM_ETHS  = 2,
+    FSL_IMX7_NUM_USDHCS = 3,
 };
 
 typedef struct FslIMX7State {
@@ -53,6 +54,7 @@ typedef struct FslIMX7State {
     IMX7CCMState   ccm;
     IMXSerialState uart[FSL_IMX7_NUM_UARTS];
     IMXFECState    eth[FSL_IMX7_NUM_ETHS];
+    SDHCIState     usdhc[FSL_IMX7_NUM_USDHCS];
 } FslIMX7State;
 
 enum FslIMX7MemoryMap {
@@ -72,10 +74,19 @@ enum FslIMX7MemoryMap {
     FSL_IMX7_ENET1_ADDR     = 0x30BE0000,
     FSL_IMX7_ENET2_ADDR     = 0x30BF0000,
 
+    FSL_IMX7_USDHC1_ADDR    = 0x30B40000,
+    FSL_IMX7_USDHC2_ADDR    = 0x30B50000,
+    FSL_IMX7_USDHC3_ADDR    = 0x30B60000,
+
     FSL_IMX7_A7MPCORE_ADDR  = 0x31000000,
 };
 
 enum FslIMX7IRQs {
+
+    FSL_IMX7_USDHC1_IRQ = 22,
+    FSL_IMX7_USDHC2_IRQ = 23,
+    FSL_IMX7_USDHC3_IRQ = 24,
+
     FSL_IMX7_UART1_IRQ = 26,
     FSL_IMX7_UART2_IRQ = 27,
     FSL_IMX7_UART3_IRQ = 28,
