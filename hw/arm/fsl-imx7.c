@@ -97,7 +97,7 @@ struct IMX7IPBlock {
         .instance    = &s->usdhc[i - 1],             \
         .size        = sizeof(s->usdhc[i - 1]),      \
         .name        = "usdhc" #i,                   \
-        .type        = TYPE_SYSBUS_SDHCI,            \
+        .type        = TYPE_IMX_USDHC,               \
         .addr        = FSL_IMX7_USDHC##i##_ADDR,     \
         .irq         = FSL_IMX7_USDHC##i##_IRQ,      \
         .connect_irq = fsl_imx7_generic_connect_irq, \
