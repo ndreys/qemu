@@ -22,7 +22,6 @@
 #include "qemu-common.h"
 #include "hw/arm/fsl-imx7.h"
 #include "sysemu/sysemu.h"
-#include "sysemu/char.h"
 #include "qemu/error-report.h"
 
 #define NAME_SIZE 20
@@ -304,7 +303,7 @@ static void fsl_imx7_class_init(ObjectClass *oc, void *data)
      * Reason: creates an ARM CPU, thus use after free(), see
      * arm_cpu_class_init()
      */
-    dc->cannot_destroy_with_object_finalize_yet = true;
+    dc->user_creatable = false;
     dc->desc = "i.MX7 SOC";
 }
 
