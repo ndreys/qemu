@@ -103,10 +103,21 @@ struct IMX7IPBlock {
         .connect_irq = fsl_imx7_generic_connect_irq, \
     }
 
+#define IMX7_IP_BLOCK_SNVS(s)                   \
+    {                                           \
+        .instance = &s->snvs,                   \
+        .size     = sizeof(s->snvs),            \
+        .name     = "snvs",                     \
+        .type     = TYPE_IMX7_SNVS,             \
+        .addr     = FSL_IMX7_SNVS_ADDR,         \
+    }
+
 #define IMX7_SOC_BLOCKS(s)          \
     IMX7_IP_BLOCK_MPCORE(s),        \
                                     \
     IMX7_IP_BLOCK_CCM(s),           \
+                                    \
+    IMX7_IP_BLOCK_SNVS(s),          \
                                     \
     IMX7_IP_BLOCK_UART(s, 1),       \
     IMX7_IP_BLOCK_UART(s, 2),       \
