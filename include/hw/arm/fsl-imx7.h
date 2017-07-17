@@ -21,6 +21,7 @@
 #include "hw/arm/arm.h"
 #include "hw/cpu/a15mpcore.h"
 #include "hw/misc/imx7_ccm.h"
+#include "hw/misc/imx7_snvs.h"
 #include "hw/misc/imx6_src.h"
 #include "hw/char/imx_serial.h"
 #include "hw/timer/imx_gpt.h"
@@ -52,6 +53,7 @@ typedef struct FslIMX7State {
     ARMCPU         cpu[FSL_IMX7_NUM_CPUS];
     A15MPPrivState a7mpcore;
     IMX7CCMState   ccm;
+    IMX7SNVSState  snvs;
     IMXSerialState uart[FSL_IMX7_NUM_UARTS];
     IMXFECState    eth[FSL_IMX7_NUM_ETHS];
     SDHCIState     usdhc[FSL_IMX7_NUM_USDHCS];
@@ -62,6 +64,7 @@ enum FslIMX7MemoryMap {
     FSL_IMX7_MMDC_SIZE      = SZ_2G,
 
     FSL_IMX7_CCM_ADDR       = 0x30360000,
+    FSL_IMX7_SNVS_ADDR	    = 0x30370000,
 
     FSL_IMX7_UART1_ADDR     = 0x30860000,
     FSL_IMX7_UART2_ADDR     = 0x30870000,
