@@ -23,6 +23,7 @@
 #include "hw/misc/imx7_ccm.h"
 #include "hw/misc/imx7_snvs.h"
 #include "hw/misc/imx6_src.h"
+#include "hw/misc/imx2_wdt.h"
 #include "hw/char/imx_serial.h"
 #include "hw/timer/imx_gpt.h"
 #include "hw/timer/imx_epit.h"
@@ -43,6 +44,7 @@ enum FslIMX7Configuration {
     FSL_IMX7_NUM_UARTS = 7,
     FSL_IMX7_NUM_ETHS  = 2,
     FSL_IMX7_NUM_USDHCS = 3,
+    FSL_IMX7_NUM_WDTS = 4,
 };
 
 typedef struct FslIMX7State {
@@ -57,11 +59,17 @@ typedef struct FslIMX7State {
     IMXSerialState uart[FSL_IMX7_NUM_UARTS];
     IMXFECState    eth[FSL_IMX7_NUM_ETHS];
     SDHCIState     usdhc[FSL_IMX7_NUM_USDHCS];
+    IMX2WdtState   wdt[FSL_IMX7_NUM_WDTS];
 } FslIMX7State;
 
 enum FslIMX7MemoryMap {
     FSL_IMX7_MMDC_ADDR      = 0x80000000,
     FSL_IMX7_MMDC_SIZE      = SZ_2G,
+
+    FSL_IMX7_WDOG1_ADDR     = 0x30280000,
+    FSL_IMX7_WDOG2_ADDR     = 0x30290000,
+    FSL_IMX7_WDOG3_ADDR     = 0x302A0000,
+    FSL_IMX7_WDOG4_ADDR     = 0x302B0000,
 
     FSL_IMX7_CCM_ADDR       = 0x30360000,
     FSL_IMX7_SNVS_ADDR	    = 0x30370000,

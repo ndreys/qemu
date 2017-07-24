@@ -111,6 +111,16 @@ struct IMX7IPBlock {
         .addr     = FSL_IMX7_SNVS_ADDR,         \
     }
 
+#define IMX7_IP_BLOCK_WDT(s, i)                 \
+    {                                           \
+        .instance = &s->wdt,                    \
+        .size     = sizeof(s->wdt),             \
+        .name     = "wdt" #i,                   \
+        .type     = TYPE_IMX2_WDT,              \
+        .addr     = FSL_IMX7_WDOG##i##_ADDR,    \
+    }
+
+
 #define IMX7_SOC_BLOCKS(s)          \
     IMX7_IP_BLOCK_MPCORE(s),        \
                                     \
@@ -131,7 +141,10 @@ struct IMX7IPBlock {
                                     \
     IMX7_IP_BLOCK_USDHC(s, 1),      \
     IMX7_IP_BLOCK_USDHC(s, 2),      \
-    IMX7_IP_BLOCK_USDHC(s, 3),
+    IMX7_IP_BLOCK_USDHC(s, 3),      \
+                                    \
+    IMX7_IP_BLOCK_WDT(s, 1)
+
 
 static void fsl_imx7_generic_connect_irq(const IMX7IPBlock *b, FslIMX7State *s)
 {
