@@ -189,7 +189,7 @@ static void fsl_imx7_mpcore_connect_irq(const IMX7IPBlock *b, FslIMX7State *s)
 
     for_each_cpu(i) {
         SysBusDevice *sbd = SYS_BUS_DEVICE(&s->a7mpcore);
-        DeviceState  *d   = DEVICE(&s->cpu[i]);
+        DeviceState  *d   = DEVICE(qemu_get_cpu(i));
 
         sysbus_connect_irq(sbd, i, qdev_get_gpio_in(d, ARM_CPU_IRQ));
         sysbus_connect_irq(sbd, i + smp_cpus, qdev_get_gpio_in(d, ARM_CPU_FIQ));
@@ -255,6 +255,12 @@ static void fsl_imx7_realize(DeviceState *dev, Error **errp)
 
     for_each_cpu(i) {
 	o = OBJECT(&s->cpu[i]);
+
+        object_property_set_int(o, QEMU_PSCI_CONDUIT_SMC,
+                                "psci-conduit", &error_abort);
+
+        object_property_set_bool(o, false, "has_el3", NULL);
+
         /* On uniprocessor, the CBAR is set to 0 */
         if (smp_cpus > 1) {
             object_property_set_int(o, FSL_IMX7_A7MPCORE_ADDR,
