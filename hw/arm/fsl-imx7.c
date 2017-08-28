@@ -115,6 +115,10 @@ static void fsl_imx7_init(Object *obj)
             object_property_add_child(obj, name, OBJECT(&s->wdt[i]),
                                       &error_fatal);
     }
+
+    object_initialize(&s->pcie, sizeof(s->pcie), TYPE_DESIGNWARE_PCIE_HOST);
+    qdev_set_parent_bus(DEVICE(&s->pcie), sysbus);
+    object_property_add_child(obj, "pcie", OBJECT(&s->pcie), &error_fatal);
 }
 
 static void fsl_imx7_realize(DeviceState *dev, Error **errp)
@@ -296,6 +300,19 @@ static void fsl_imx7_realize(DeviceState *dev, Error **errp)
 
         sysbus_mmio_map(SYS_BUS_DEVICE(&s->wdt[i]), 0, FSL_IMX7_WDOGn_ADDR[i]);
     }
+
+    object_property_set_bool(OBJECT(&s->pcie), true,
+                             "realized", &error_abort);
+    sysbus_mmio_map(SYS_BUS_DEVICE(&s->pcie), 0, FSL_IMX7_PCIE_REG_ADDR);
+
+    irq = qdev_get_gpio_in(DEVICE(&s->a7mpcore), FSL_IMX7_PCI_INTA_IRQ);
+    sysbus_connect_irq(SYS_BUS_DEVICE(&s->pcie), 0, irq);
+    irq = qdev_get_gpio_in(DEVICE(&s->a7mpcore), FSL_IMX7_PCI_INTB_IRQ);
+    sysbus_connect_irq(SYS_BUS_DEVICE(&s->pcie), 1, irq);
+    irq = qdev_get_gpio_in(DEVICE(&s->a7mpcore), FSL_IMX7_PCI_INTC_IRQ);
+    sysbus_connect_irq(SYS_BUS_DEVICE(&s->pcie), 2, irq);
+    irq = qdev_get_gpio_in(DEVICE(&s->a7mpcore), FSL_IMX7_PCI_INTD_IRQ);
+    sysbus_connect_irq(SYS_BUS_DEVICE(&s->pcie), 3, irq);
 }
 
 static void fsl_imx7_class_init(ObjectClass *oc, void *data)

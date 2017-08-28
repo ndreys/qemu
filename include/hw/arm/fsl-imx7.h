@@ -32,6 +32,7 @@
 #include "hw/sd/sdhci.h"
 #include "hw/ssi/imx_spi.h"
 #include "hw/net/imx_fec.h"
+#include "hw/pci-host/designware.h"
 #include "exec/memory.h"
 #include "cpu.h"
 #include "qemu/sizes.h"
@@ -60,6 +61,8 @@ typedef struct FslIMX7State {
     IMXFECState    eth[FSL_IMX7_NUM_ETHS];
     SDHCIState     usdhc[FSL_IMX7_NUM_USDHCS];
     IMX2WdtState   wdt[FSL_IMX7_NUM_WDTS];
+
+    DesignwarePCIEHost pcie;
 } FslIMX7State;
 
 enum FslIMX7MemoryMap {
@@ -90,6 +93,9 @@ enum FslIMX7MemoryMap {
     FSL_IMX7_USDHC3_ADDR    = 0x30B60000,
 
     FSL_IMX7_A7MPCORE_ADDR  = 0x31000000,
+
+    FSL_IMX7_PCIE_REG_ADDR  = 0x33800000,
+    FSL_IMX7_PCIE_REG_SIZE  = SZ_16K,
 };
 
 enum FslIMX7IRQs {
@@ -104,6 +110,12 @@ enum FslIMX7IRQs {
     FSL_IMX7_UART4_IRQ = 29,
     FSL_IMX7_UART5_IRQ = 30,
     FSL_IMX7_UART6_IRQ = 16,
+
+    FSL_IMX7_PCI_INTA_IRQ = 122,
+    FSL_IMX7_PCI_INTB_IRQ = 123,
+    FSL_IMX7_PCI_INTC_IRQ = 124,
+    FSL_IMX7_PCI_INTD_IRQ = 125,
+
     FSL_IMX7_UART7_IRQ = 126,
 
 #define FSL_IMX7_ENET_IRQ(i, n)  ((n) + ((i) ? 100 : 118))
