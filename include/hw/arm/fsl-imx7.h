@@ -22,6 +22,7 @@
 #include "hw/cpu/a15mpcore.h"
 #include "hw/misc/imx7_ccm.h"
 #include "hw/misc/imx7_snvs.h"
+#include "hw/misc/imx7_gpr.h"
 #include "hw/misc/imx6_src.h"
 #include "hw/misc/imx2_wdt.h"
 #include "hw/char/imx_serial.h"
@@ -61,6 +62,7 @@ typedef struct FslIMX7State {
     IMXFECState    eth[FSL_IMX7_NUM_ETHS];
     SDHCIState     usdhc[FSL_IMX7_NUM_USDHCS];
     IMX2WdtState   wdt[FSL_IMX7_NUM_WDTS];
+    IMX7GPRState   gpr;
 
     DesignwarePCIEHost pcie;
 } FslIMX7State;
@@ -96,6 +98,9 @@ enum FslIMX7MemoryMap {
 
     FSL_IMX7_PCIE_REG_ADDR  = 0x33800000,
     FSL_IMX7_PCIE_REG_SIZE  = SZ_16K,
+
+
+    FSL_IMX7_GPR_ADDR       = 0x30340000,
 };
 
 enum FslIMX7IRQs {

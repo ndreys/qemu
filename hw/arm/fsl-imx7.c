@@ -116,6 +116,16 @@ static void fsl_imx7_init(Object *obj)
                                       &error_fatal);
     }
 
+    /*
+     * GPR
+     */
+    object_initialize(&s->gpr, sizeof(s->gpr), TYPE_IMX7_GPR);
+    qdev_set_parent_bus(DEVICE(&s->gpr), sysbus);
+    object_property_add_child(obj, "gpr", OBJECT(&s->gpr), &error_fatal);
+
+    /*
+     * PCIE
+     */
     object_initialize(&s->pcie, sizeof(s->pcie), TYPE_DESIGNWARE_PCIE_HOST);
     qdev_set_parent_bus(DEVICE(&s->pcie), sysbus);
     object_property_add_child(obj, "pcie", OBJECT(&s->pcie), &error_fatal);
@@ -300,6 +310,10 @@ static void fsl_imx7_realize(DeviceState *dev, Error **errp)
 
         sysbus_mmio_map(SYS_BUS_DEVICE(&s->wdt[i]), 0, FSL_IMX7_WDOGn_ADDR[i]);
     }
+
+    object_property_set_bool(OBJECT(&s->gpr), true, "realized",
+                             &error_abort);
+    sysbus_mmio_map(SYS_BUS_DEVICE(&s->gpr), 0, FSL_IMX7_GPR_ADDR);
 
     object_property_set_bool(OBJECT(&s->pcie), true,
                              "realized", &error_abort);
