@@ -3267,7 +3267,7 @@ static inline int cpu_mmu_index(CPUARMState *env, bool ifetch)
     return FIELD_EX32(env->hflags, TBFLAG_ANY, MMUIDX);
 }
 
-static inline bool bswap_code(bool sctlr_b)
+static inline bool bswap_code(CPUARMState *env)
 {
 #ifdef CONFIG_USER_ONLY
     /* BE8 (SCTLR.B = 0, TARGET_WORDS_BIGENDIAN = 1) is mixed endian.
@@ -3278,7 +3278,7 @@ static inline bool bswap_code(bool sctlr_b)
 #ifdef TARGET_WORDS_BIGENDIAN
         1 ^
 #endif
-        sctlr_b;
+        arm_sctlr_b(env);
 #else
     /* All code access in ARM is little endian, and there are no loaders
      * doing swaps that need to be reversed
