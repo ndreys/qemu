@@ -247,6 +247,10 @@ static void arm_cpu_reset(DeviceState *dev)
     }
     env->daif = PSTATE_D | PSTATE_A | PSTATE_I | PSTATE_F;
 
+    if (cpu->cfgend_instr) {
+        env->uncached_cpsr |= CPSR_E;
+    }
+
     if (arm_feature(env, ARM_FEATURE_M)) {
         uint32_t initial_msp; /* Loaded from 0x0 */
         uint32_t initial_pc; /* Loaded from 0x4 */
@@ -1081,6 +1085,9 @@ static Property arm_cpu_has_neon_property =
 static Property arm_cpu_has_dsp_property =
             DEFINE_PROP_BOOL("dsp", ARMCPU, has_dsp, true);
 
+static Property arm_cpu_cfgend_instr_property =
+            DEFINE_PROP_BOOL("cfgend-instr", ARMCPU, cfgend_instr, false);
+
 static Property arm_cpu_has_mpu_property =
             DEFINE_PROP_BOOL("has-mpu", ARMCPU, has_mpu, true);
 
@@ -1239,6 +1246,8 @@ void arm_cpu_post_init(Object *obj)
     }
 
     qdev_property_add_static(DEVICE(obj), &arm_cpu_cfgend_property);
+
+    qdev_property_add_static(DEVICE(obj), &arm_cpu_cfgend_instr_property);
 
     if (arm_feature(&cpu->env, ARM_FEATURE_GENERIC_TIMER)) {
         qdev_property_add_static(DEVICE(cpu), &arm_cpu_gt_cntfrq_property);
@@ -1619,6 +1628,10 @@ static void arm_cpu_realizefn(DeviceState *dev, Error **errp)
         } else {
             cpu->reset_sctlr |= SCTLR_B;
         }
+    }
+
+    if (cpu->cfgend_instr) {
+        cpu->reset_sctlr |= SCTLR_IE;
     }
 
     if (!cpu->has_el3) {
