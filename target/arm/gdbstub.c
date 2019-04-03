@@ -27,6 +27,11 @@ typedef struct RegisterSysregXmlParam {
     int n;
 } RegisterSysregXmlParam;
 
+static uint32_t arm_gdb_get_reg32(CPUARMState *env, uint32_t reg)
+{
+    return arm_sctlr_ie(env) ? bswap32(reg) : reg;
+}
+
 /* Old gdb always expect FPA registers.  Newer (xml-aware) gdb only expect
    whatever the target description contains.  Due to a historical mishap
    the FPA registers appear in between core integer regs and the CPSR.
@@ -40,7 +45,8 @@ int arm_cpu_gdb_read_register(CPUState *cs, GByteArray *mem_buf, int n)
 
     if (n < 16) {
         /* Core integer register.  */
-        return gdb_get_reg32(mem_buf, env->regs[n]);
+        return gdb_get_reg32(mem_buf,
+                             arm_gdb_get_reg32(env, env->regs[n]));
     }
     if (n < 24) {
         /* FPA registers.  */
@@ -59,9 +65,10 @@ int arm_cpu_gdb_read_register(CPUState *cs, GByteArray *mem_buf, int n)
     case 25:
         /* CPSR, or XPSR for M-profile */
         if (arm_feature(env, ARM_FEATURE_M)) {
-            return gdb_get_reg32(mem_buf, xpsr_read(env));
-        } else {
             return gdb_get_reg32(mem_buf, cpsr_read(env));
+        } else {
+            return gdb_get_reg32(mem_buf,
+                                 arm_gdb_get_reg32(env, cpsr_read(env)));
         }
     }
     /* Unknown register.  */
@@ -74,7 +81,7 @@ int arm_cpu_gdb_write_register(CPUState *cs, uint8_t *mem_buf, int n)
     CPUARMState *env = &cpu->env;
     uint32_t tmp;
 
-    tmp = ldl_p(mem_buf);
+    tmp = arm_gdb_get_reg32(env, ldl_p(mem_buf));
 
     /* Mask out low bit of PC to workaround gdb bugs.  This will probably
        cause problems if we ever implement the Jazelle DBX extensions.  */
