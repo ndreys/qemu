@@ -5,3 +5,7 @@ nrf51_gpio_read(uint64_t offset, uint64_t r) "offset 0x%" PRIx64 " value 0x%" PR
 nrf51_gpio_write(uint64_t offset, uint64_t value) "offset 0x%" PRIx64 " value 0x%" PRIx64
 nrf51_gpio_set(int64_t line, int64_t value) "line %" PRIi64 " value %" PRIi64
 nrf51_gpio_update_output_irq(int64_t line, int64_t value) "line %" PRIi64 " value %" PRIi64
+
+# hercules_gpio.c
+
+hercules_gio_update(uint32_t bank, uint32_t din, uint32_t dir, uint32_t dout) "bank %" PRId32 " din 0x%" PRIx32 " dir 0x%" PRIx32 " dout 0x%" PRIx32
