@@ -90,7 +90,7 @@ common-obj-$(CONFIG_HERCULES) += hercules_system.o hercules_scm.o \
             hercules_esm.o hercules_efuse.o \
             hercules_l2ramw.o hercules_pmm.o \
             hercules_stc.o hercules_pbist.o \
-            hercules_ccm.o
+            hercules_ccm.o hercules_l2fmc.o
 obj-$(CONFIG_MAC_VIA) += mac_via.o
 
 common-obj-$(CONFIG_GRLIB) += grlib_ahb_apb_pnp.o
