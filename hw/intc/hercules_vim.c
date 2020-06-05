@@ -13,6 +13,7 @@
 #include "cpu.h"
 
 #include "hw/intc/hercules_vim.h"
+#include "hw/arm/hercules.h"
 
 #define qemu_log_bad_offset(offset) \
     qemu_log_mask(LOG_GUEST_ERROR, "%s: Bad offset %" HWADDR_PRIx "\n", \
@@ -220,23 +221,6 @@ static void hercules_vim_write(void *opaque, hwaddr offset,
     }
 }
 
-static const MemoryRegionOps hercules_vim_ops = {
-    .read = hercules_vim_read,
-    .write = hercules_vim_write,
-    .endianness = DEVICE_BIG_ENDIAN,
-    .impl = {
-        /*
-         * Our device would not work correctly if the guest was doing
-         * unaligned access. This might not be a limitation on the real
-         * device but in practice there is no reason for a guest to access
-         * this device unaligned.
-         */
-        .min_access_size = 4,
-        .max_access_size = 4,
-        .unaligned = false,
-    },
-};
-
 static void hercules_vim_reset(DeviceState *d)
 {
     HerculesVimState *s = HERCULES_VIM(d);
@@ -274,6 +258,30 @@ static void hercules_vim_realize(DeviceState *dev, Error **errp)
 {
     HerculesVimState *s = HERCULES_VIM(dev);
     SysBusDevice *sbd = SYS_BUS_DEVICE(dev);
+    Object *obj = OBJECT(dev);
+    HerculesState *parent = HERCULES_SOC(obj->parent);
+
+    static MemoryRegionOps hercules_vim_ops = {
+        .read = hercules_vim_read,
+        .write = hercules_vim_write,
+        .endianness = DEVICE_LITTLE_ENDIAN,
+        .impl = {
+            /*
+             * Our device would not work correctly if the guest was doing
+             * unaligned access. This might not be a limitation on the real
+             * device but in practice there is no reason for a guest to access
+             * this device unaligned.
+             */
+            .min_access_size = 4,
+            .max_access_size = 4,
+            .unaligned = false,
+        },
+    };
+
+    if (parent->is_tms570)
+    {
+        hercules_vim_ops.endianness = DEVICE_BIG_ENDIAN;
+    }
 
     qdev_prop_set_string(DEVICE(&s->ecc), "name", "ecc-regs");
     qdev_prop_set_uint64(DEVICE(&s->ecc), "size", 256);

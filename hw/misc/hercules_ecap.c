@@ -15,6 +15,7 @@
 #include "sysemu/sysemu.h"
 
 #include "hw/misc/hercules_ecap.h"
+#include "hw/arm/hercules.h"
 
 enum {
     HERCULES_ECAP_SIZE         = 256,
@@ -112,23 +113,30 @@ static void hercules_ecap_write(void *opaque, hwaddr offset,
     }
 }
 
-static const MemoryRegionOps hercules_ecap_ops = {
-    .read = hercules_ecap_read,
-    .write = hercules_ecap_write,
-    .endianness = DEVICE_BIG_ENDIAN,
-    .impl = {
-        .min_access_size = 2,
-        .max_access_size = 4,
-        .unaligned = false,
-    },
-};
-
 static void hercules_ecap_realize(DeviceState *dev, Error **errp)
 {
     HerculesECAPState *s = HERCULES_ECAP(dev);
     SysBusDevice *sbd = SYS_BUS_DEVICE(dev);
+    Object *obj = OBJECT(dev);
+    HerculesState *parent = HERCULES_SOC(obj->parent);
 
-    memory_region_init_io(&s->iomem, OBJECT(dev), &hercules_ecap_ops,
+    static MemoryRegionOps hercules_ecap_ops = {
+        .read = hercules_ecap_read,
+        .write = hercules_ecap_write,
+        .endianness = DEVICE_LITTLE_ENDIAN,
+        .impl = {
+            .min_access_size = 2,
+            .max_access_size = 4,
+            .unaligned = false,
+        },
+    };
+
+    if (parent->is_tms570)
+    {
+        hercules_ecap_ops.endianness = DEVICE_BIG_ENDIAN;
+    }
+
+    memory_region_init_io(&s->iomem, obj, &hercules_ecap_ops,
                           s, TYPE_HERCULES_ECAP ".io", HERCULES_ECAP_SIZE);
     sysbus_init_mmio(sbd, &s->iomem);
 }

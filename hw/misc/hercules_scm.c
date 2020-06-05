@@ -16,6 +16,7 @@
 #include "sysemu/sysemu.h"
 
 #include "hw/misc/hercules_scm.h"
+#include "hw/arm/hercules.h"
 
 enum {
     HERCULES_SCM_SIZE         = 256,
@@ -108,47 +109,54 @@ static void hercules_sdr_mmr_write(void *opaque, hwaddr offset,
     }
 }
 
-static const MemoryRegionOps hercules_scm_ops = {
-    .read = hercules_scm_read,
-    .write = hercules_scm_write,
-    .endianness = DEVICE_BIG_ENDIAN,
-    .impl = {
-        /*
-         * Our device would not work correctly if the guest was doing
-         * unaligned access. This might not be a limitation on the real
-         * device but in practice there is no reason for a guest to access
-         * this device unaligned.
-         */
-        .min_access_size = 4,
-        .max_access_size = 4,
-        .unaligned = false,
-    },
-};
-
-static const MemoryRegionOps hercules_sdr_mmr_ops = {
-    .read = hercules_sdr_mmr_read,
-    .write = hercules_sdr_mmr_write,
-    /*
-     * This is not BE on TMS570 as per Device#51 errata
-     */
-    .endianness = DEVICE_NATIVE_ENDIAN,
-    .impl = {
-        /*
-         * Our device would not work correctly if the guest was doing
-         * unaligned access. This might not be a limitation on the real
-         * device but in practice there is no reason for a guest to access
-         * this device unaligned.
-         */
-        .min_access_size = 4,
-        .max_access_size = 4,
-        .unaligned = false,
-    },
-};
-
 static void hercules_scm_realize(DeviceState *dev, Error **errp)
 {
     HerculesSCMState *s = HERCULES_SCM(dev);
     SysBusDevice *sbd = SYS_BUS_DEVICE(dev);
+    Object *obj = OBJECT(dev);
+    HerculesState *parent = HERCULES_SOC(obj->parent);
+
+    static MemoryRegionOps hercules_scm_ops = {
+        .read = hercules_scm_read,
+        .write = hercules_scm_write,
+        .endianness = DEVICE_LITTLE_ENDIAN,
+        .impl = {
+            /*
+             * Our device would not work correctly if the guest was doing
+             * unaligned access. This might not be a limitation on the real
+             * device but in practice there is no reason for a guest to access
+             * this device unaligned.
+             */
+            .min_access_size = 4,
+            .max_access_size = 4,
+            .unaligned = false,
+        },
+    };
+
+    static MemoryRegionOps hercules_sdr_mmr_ops = {
+        .read = hercules_sdr_mmr_read,
+        .write = hercules_sdr_mmr_write,
+        /*
+         * This is not BE on TMS570 as per Device#51 errata
+         */
+        .endianness = DEVICE_NATIVE_ENDIAN,
+        .impl = {
+            /*
+             * Our device would not work correctly if the guest was doing
+             * unaligned access. This might not be a limitation on the real
+             * device but in practice there is no reason for a guest to access
+             * this device unaligned.
+             */
+            .min_access_size = 4,
+            .max_access_size = 4,
+            .unaligned = false,
+        },
+    };
+
+    if (parent->is_tms570)
+    {
+        hercules_scm_ops.endianness = DEVICE_BIG_ENDIAN;
+    }
 
     memory_region_init_io(&s->io.scm, OBJECT(dev), &hercules_scm_ops,
                           s, TYPE_HERCULES_SCM ".io.scm", HERCULES_SCM_SIZE);

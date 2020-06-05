@@ -15,7 +15,7 @@
 #include "qapi/error.h"
 #include "sysemu/runstate.h"
 #include "sysemu/sysemu.h"
-
+#include "hw/arm/hercules.h"
 #include "hw/misc/hercules_system.h"
 
 #define NAME_SIZE 20
@@ -180,23 +180,6 @@ static void hercules_sys_write(void *opaque, hwaddr offset,
     }
 }
 
-static const MemoryRegionOps hercules_system_sys_ops = {
-    .read = hercules_sys_read,
-    .write = hercules_sys_write,
-    .endianness = DEVICE_BIG_ENDIAN,
-    .impl = {
-        /*
-         * Our device would not work correctly if the guest was doing
-         * unaligned access. This might not be a limitation on the real
-         * device but in practice there is no reason for a guest to access
-         * this device unaligned.
-         */
-        .min_access_size = 4,
-        .max_access_size = 4,
-        .unaligned = false,
-    },
-};
-
 static uint64_t hercules_sys2_read(void *opaque, hwaddr offset,
                                   unsigned size)
 {
@@ -232,24 +215,6 @@ static void hercules_sys2_write(void *opaque, hwaddr offset,
     }
 }
 
-
-static const MemoryRegionOps hercules_system_sys2_ops = {
-    .read = hercules_sys2_read,
-    .write = hercules_sys2_write,
-    .endianness = DEVICE_BIG_ENDIAN,
-    .impl = {
-        /*
-         * Our device would not work correctly if the guest was doing
-         * unaligned access. This might not be a limitation on the real
-         * device but in practice there is no reason for a guest to access
-         * this device unaligned.
-         */
-        .min_access_size = 4,
-        .max_access_size = 4,
-        .unaligned = false,
-    },
-};
-
 static void hercules_system_set_signal(void *opaque, int sig, int level)
 {
     HerculesSystemState *s = opaque;
@@ -274,6 +239,7 @@ static void hercules_system_set_signal(void *opaque, int sig, int level)
 static void hercules_system_initfn(Object *obj)
 {
     HerculesSystemState *s = HERCULES_SYSTEM(obj);
+
     int i;
 
     for (i = 0; i < HERCULES_SYSTEM_NUM_PCRS; i++) {
@@ -289,16 +255,59 @@ static void hercules_system_realize(DeviceState *dev, Error **errp)
 {
     HerculesSystemState *s = HERCULES_SYSTEM(dev);
     SysBusDevice *sbd = SYS_BUS_DEVICE(dev);
+    Object *obj = OBJECT(dev);
+    HerculesState *parent = HERCULES_SOC(obj->parent);
+
     char name[NAME_SIZE];
     DeviceState *d;
     int i;
 
-    memory_region_init_io(&s->sys, OBJECT(dev), &hercules_system_sys_ops,
+    static MemoryRegionOps hercules_system_sys_ops = {
+        .read = hercules_sys_read,
+        .write = hercules_sys_write,
+        .endianness = DEVICE_LITTLE_ENDIAN,
+        .impl = {
+            /*
+             * Our device would not work correctly if the guest was doing
+             * unaligned access. This might not be a limitation on the real
+             * device but in practice there is no reason for a guest to access
+             * this device unaligned.
+             */
+            .min_access_size = 4,
+            .max_access_size = 4,
+            .unaligned = false,
+        },
+    };
+
+    static MemoryRegionOps hercules_system_sys2_ops = {
+        .read = hercules_sys2_read,
+        .write = hercules_sys2_write,
+        .endianness = DEVICE_LITTLE_ENDIAN,
+        .impl = {
+            /*
+             * Our device would not work correctly if the guest was doing
+             * unaligned access. This might not be a limitation on the real
+             * device but in practice there is no reason for a guest to access
+             * this device unaligned.
+             */
+            .min_access_size = 4,
+            .max_access_size = 4,
+            .unaligned = false,
+        },
+    };
+
+    if (parent->is_tms570)
+    {
+        hercules_system_sys_ops.endianness = DEVICE_BIG_ENDIAN;
+        hercules_system_sys2_ops.endianness = DEVICE_BIG_ENDIAN;
+    }
+
+    memory_region_init_io(&s->sys, obj, &hercules_system_sys_ops,
                           s, TYPE_HERCULES_SYSTEM ".io.sys",
                           HERCULES_SYSTEM_SYS_SIZE);
     sysbus_init_mmio(sbd, &s->sys);
 
-    memory_region_init_io(&s->sys2, OBJECT(dev), &hercules_system_sys2_ops,
+    memory_region_init_io(&s->sys2, obj, &hercules_system_sys2_ops,
                           s, TYPE_HERCULES_SYSTEM ".io.sys2",
                           HERCULES_SYSTEM_SYS2_SIZE);
     sysbus_init_mmio(sbd, &s->sys2);

@@ -15,6 +15,7 @@
 #include "sysemu/sysemu.h"
 
 #include "hw/misc/hercules_ccm.h"
+#include "hw/arm/hercules.h"
 
 enum {
     HERCULES_CCM_SIZE         = 256,
@@ -108,29 +109,36 @@ static void hercules_ccm_write(void *opaque, hwaddr offset,
     }
 }
 
-static const MemoryRegionOps hercules_ccm_ops = {
-    .read = hercules_ccm_read,
-    .write = hercules_ccm_write,
-    .endianness = DEVICE_BIG_ENDIAN,
-    .impl = {
-        /*
-         * Our device would not work correctly if the guest was doing
-         * unaligned access. This might not be a limitation on the real
-         * device but in practice there is no reason for a guest to access
-         * this device unaligned.
-         */
-        .min_access_size = 4,
-        .max_access_size = 4,
-        .unaligned = false,
-    },
-};
-
 static void hercules_ccm_realize(DeviceState *dev, Error **errp)
 {
     HerculesCCMState *s = HERCULES_CCM(dev);
     SysBusDevice *sbd = SYS_BUS_DEVICE(dev);
+    Object *obj = OBJECT(dev);
+    HerculesState *parent = HERCULES_SOC(obj->parent);
 
-    memory_region_init_io(&s->iomem, OBJECT(dev), &hercules_ccm_ops,
+    static MemoryRegionOps hercules_ccm_ops = {
+        .read = hercules_ccm_read,
+        .write = hercules_ccm_write,
+        .endianness = DEVICE_LITTLE_ENDIAN,
+        .impl = {
+            /*
+             * Our device would not work correctly if the guest was doing
+             * unaligned access. This might not be a limitation on the real
+             * device but in practice there is no reason for a guest to access
+             * this device unaligned.
+             */
+            .min_access_size = 4,
+            .max_access_size = 4,
+            .unaligned = false,
+        },
+    };
+
+    if (parent->is_tms570)
+    {
+        hercules_ccm_ops.endianness = DEVICE_BIG_ENDIAN;
+    }
+
+    memory_region_init_io(&s->iomem, obj, &hercules_ccm_ops,
                           s, TYPE_HERCULES_CCM ".io", HERCULES_CCM_SIZE);
     sysbus_init_mmio(sbd, &s->iomem);
 

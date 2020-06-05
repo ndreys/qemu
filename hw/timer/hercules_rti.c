@@ -15,6 +15,7 @@
 #include "qapi/error.h"
 
 #include "hw/timer/hercules_rti.h"
+#include "hw/arm/hercules.h"
 
 enum HerculesRtiRegisters {
     RTIGCTRL       = 0x00,
@@ -270,23 +271,6 @@ static void hercules_rti_write(void *opaque, hwaddr offset, uint64_t val64,
     }
 }
 
-static const MemoryRegionOps hercules_rti_ops = {
-    .read = hercules_rti_read,
-    .write = hercules_rti_write,
-    .endianness = DEVICE_BIG_ENDIAN,
-    .impl = {
-        /*
-         * Our device would not work correctly if the guest was doing
-         * unaligned access. This might not be a limitation on the real
-         * device but in practice there is no reason for a guest to access
-         * this device unaligned.
-         */
-        .min_access_size = 4,
-        .max_access_size = 4,
-        .unaligned = false,
-    },
-};
-
 static void hercules_rti_init_irq_group(HerculesRtiState *s, int group,
                                         int line_num)
 {
@@ -312,9 +296,33 @@ static void hercules_rti_realize(DeviceState *dev, Error **errp)
 {
     HerculesRtiState *s = HERCULES_RTI(dev);
     SysBusDevice *sbd = SYS_BUS_DEVICE(dev);
+    Object *obj = OBJECT(dev);
+    HerculesState *parent = HERCULES_SOC(obj->parent);
     int i;
 
-    memory_region_init_io(&s->iomem, OBJECT(dev), &hercules_rti_ops, s,
+    static MemoryRegionOps hercules_rti_ops = {
+        .read = hercules_rti_read,
+        .write = hercules_rti_write,
+        .endianness = DEVICE_LITTLE_ENDIAN,
+        .impl = {
+            /*
+             * Our device would not work correctly if the guest was doing
+             * unaligned access. This might not be a limitation on the real
+             * device but in practice there is no reason for a guest to access
+             * this device unaligned.
+             */
+            .min_access_size = 4,
+            .max_access_size = 4,
+            .unaligned = false,
+        },
+    };
+
+    if (parent->is_tms570)
+    {
+        hercules_rti_ops.endianness = DEVICE_BIG_ENDIAN;
+    }
+
+    memory_region_init_io(&s->iomem, obj, &hercules_rti_ops, s,
                           TYPE_HERCULES_RTI ".io",
                           HERCULES_RTI_SIZE);
     sysbus_init_mmio(sbd, &s->iomem);

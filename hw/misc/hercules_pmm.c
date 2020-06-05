@@ -15,6 +15,7 @@
 #include "sysemu/sysemu.h"
 
 #include "hw/misc/hercules_pmm.h"
+#include "hw/arm/hercules.h"
 
 enum {
     HERCULES_PMM_SIZE         = 256,
@@ -97,27 +98,34 @@ static void hercules_pmm_write(void *opaque, hwaddr offset,
     }
 }
 
-static const MemoryRegionOps hercules_pmm_ops = {
-    .read = hercules_pmm_read,
-    .write = hercules_pmm_write,
-    .endianness = DEVICE_BIG_ENDIAN,
-    .impl = {
-        /*
-         * Our device would not work correctly if the guest was doing
-         * unaligned access. This might not be a limitation on the real
-         * device but in practice there is no reason for a guest to access
-         * this device unaligned.
-         */
-        .min_access_size = 4,
-        .max_access_size = 4,
-        .unaligned = false,
-    },
-};
-
 static void hercules_pmm_realize(DeviceState *dev, Error **errp)
 {
     HerculesPMMState *s = HERCULES_PMM(dev);
     SysBusDevice *sbd = SYS_BUS_DEVICE(dev);
+    Object *obj = OBJECT(dev);
+    HerculesState *parent = HERCULES_SOC(obj->parent);
+
+    static MemoryRegionOps hercules_pmm_ops = {
+        .read = hercules_pmm_read,
+        .write = hercules_pmm_write,
+        .endianness = DEVICE_LITTLE_ENDIAN,
+        .impl = {
+            /*
+             * Our device would not work correctly if the guest was doing
+             * unaligned access. This might not be a limitation on the real
+             * device but in practice there is no reason for a guest to access
+             * this device unaligned.
+             */
+            .min_access_size = 4,
+            .max_access_size = 4,
+            .unaligned = false,
+        },
+    };
+
+    if (parent->is_tms570)
+    {
+        hercules_pmm_ops.endianness = DEVICE_BIG_ENDIAN;
+    }
 
     memory_region_init_io(&s->iomem, OBJECT(dev), &hercules_pmm_ops,
                           s, TYPE_HERCULES_PMM ".io", HERCULES_PMM_SIZE);

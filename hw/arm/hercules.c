@@ -66,11 +66,17 @@ HERCULES_MIBSPIn_DMAREQ[HERCULES_NUM_MIBSPIS][HERCULES_SPI_NUM_DMAREQS] = {
 static void hercules_initfn(Object *obj)
 {
     HerculesState *s = HERCULES_SOC(obj);
-    Object *cpu_obj = OBJECT(&s->cpu);
+    Object *cpu_obj = object_new(ARM_CPU_TYPE_NAME("cortex-r5f"));
     int i;
 
-    object_initialize(cpu_obj, sizeof(s->cpu),
-                      ARM_CPU_TYPE_NAME("cortex-r5f"));
+    s->cpu = ARM_CPU(cpu_obj);
+    s->cpu->ctr = 0x1d192992; /* 32K icache 32K dcache */
+    set_feature(&s->cpu->env, ARM_FEATURE_DUMMY_C15_REGS);
+
+    if (s->is_tms570) {
+        object_property_set_bool(cpu_obj, true, "cfgend", &error_fatal);
+        object_property_set_bool(cpu_obj, true, "cfgend-instr", &error_fatal);
+    }
 
     object_property_add_child(obj, "cpu", cpu_obj);
 
@@ -149,7 +155,6 @@ static void hercules_cpu_reset(void *opaque)
 static void hercules_realize(DeviceState *dev, Error **errp)
 {
     HerculesState *s = HERCULES_SOC(dev);
-    Object *cpu_obj = OBJECT(&s->cpu);
     MemoryRegion *system_memory = get_system_memory();
     MemoryRegion *flash = g_new(MemoryRegion, 1);
     MemoryRegion *eeprom = g_new(MemoryRegion, 1);
@@ -159,16 +164,8 @@ static void hercules_realize(DeviceState *dev, Error **errp)
     qemu_irq irq, error;
     int i;
 
-    s->cpu.ctr = 0x1d192992; /* 32K icache 32K dcache */
-    set_feature(&s->cpu.env, ARM_FEATURE_DUMMY_C15_REGS);
-
-    if (s->is_tms570) {
-        object_property_set_bool(cpu_obj, true, "cfgend", &error_fatal);
-        object_property_set_bool(cpu_obj, true, "cfgend-instr", &error_fatal);
-    }
-
-    object_property_set_bool(OBJECT(&s->cpu), true, "realized", &error_fatal);
-    qemu_register_reset(hercules_cpu_reset, ARM_CPU(&s->cpu));
+    object_property_set_bool(OBJECT(s->cpu), true, "realized", &error_fatal);
+    qemu_register_reset(hercules_cpu_reset, ARM_CPU(s->cpu));
 
     memory_region_init_rom(flash, OBJECT(dev), "hercules.flash",
                            HERCULES_FLASH_SIZE, &error_fatal);
@@ -228,9 +225,9 @@ static void hercules_realize(DeviceState *dev, Error **errp)
     object_property_set_bool(OBJECT(&s->vim), true, "realized",
                              &error_abort);
     sbd = SYS_BUS_DEVICE(&s->vim);
-    irq = qdev_get_gpio_in(DEVICE(&s->cpu), ARM_CPU_IRQ);
+    irq = qdev_get_gpio_in(DEVICE(s->cpu), ARM_CPU_IRQ);
     sysbus_connect_irq(sbd, 0, irq);
-    irq = qdev_get_gpio_in(DEVICE(&s->cpu), ARM_CPU_FIQ);
+    irq = qdev_get_gpio_in(DEVICE(s->cpu), ARM_CPU_FIQ);
     sysbus_connect_irq(sbd, 1, irq);
     sysbus_mmio_map(sbd, 0, HERCULES_VIM_ECC_ADDR);
     sysbus_mmio_map(sbd, 1, HERCULES_VIM_CONTROL_ADDR);
@@ -534,7 +531,6 @@ static void hercules_realize(DeviceState *dev, Error **errp)
 
 #ifdef HOST_WORDS_BIGENDIAN
     error_setg(errp, "failed realize on big endian host");
-    return;
 #endif
 }
 
@@ -577,11 +573,15 @@ static void hercules_xx57_init(MachineState *machine, bool is_tms570)
     DriveInfo *eeprom = drive_get(IF_MTD, 0, 0);
     const char *file;
 
-    dev = object_new(TYPE_HERCULES_SOC);
+    dev = object_new_with_props(TYPE_HERCULES_SOC,
+                                object_get_objects_root(),
+                                "hercules0",
+                                &error_fatal,
+                                "tms570", is_tms570,
+                                NULL);
     qdev_prop_set_drive(DEVICE(dev), "eeprom",
                         eeprom ? blk_by_legacy_dinfo(eeprom) : NULL,
                         &error_abort);
-    object_property_set_bool(dev, is_tms570, "tms570", &error_fatal);
     object_property_set_bool(dev, true, "realized", &error_fatal);
 
     memory_region_init_ram(sdram, OBJECT(dev), "hercules.sdram",

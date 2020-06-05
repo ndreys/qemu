@@ -15,6 +15,7 @@
 #include "qapi/error.h"
 
 #include "hw/adc/hercules_mibadc.h"
+#include "hw/arm/hercules.h"
 
 #define qemu_log_bad_offset(offset) \
     qemu_log_mask(LOG_GUEST_ERROR, "%s: Bad offset %" HWADDR_PRIx "\n", \
@@ -269,61 +270,70 @@ static void hercules_mibadc_write(void *opaque, hwaddr offset,
 
 #undef IDX
 
-static const MemoryRegionOps hercules_mibadc_ecc_ops = {
-    .read = hercules_mibadc_ecc_read,
-    .write = hercules_mibadc_ecc_write,
-    .endianness = DEVICE_BIG_ENDIAN,
-    .impl = {
-        /*
-         * Our device would not work correctly if the guest was doing
-         * unaligned access. This might not be a limitation on the real
-         * device but in practice there is no reason for a guest to access
-         * this device unaligned.
-         */
-        .min_access_size = 4,
-        .max_access_size = 4,
-        .unaligned = false,
-    },
-};
-
-static const MemoryRegionOps hercules_mibadc_ram_ops = {
-    .read = hercules_mibadc_ram_read,
-    .write = hercules_mibadc_ram_write,
-    .endianness = DEVICE_BIG_ENDIAN,
-    .impl = {
-        /*
-         * Our device would not work correctly if the guest was doing
-         * unaligned access. This might not be a limitation on the real
-         * device but in practice there is no reason for a guest to access
-         * this device unaligned.
-         */
-        .min_access_size = 4,
-        .max_access_size = 4,
-        .unaligned = false,
-    },
-};
-
-static const MemoryRegionOps hercules_mibadc_ops = {
-    .read = hercules_mibadc_read,
-    .write = hercules_mibadc_write,
-    .endianness = DEVICE_BIG_ENDIAN,
-    .impl = {
-        /*
-         * Our device would not work correctly if the guest was doing
-         * unaligned access. This might not be a limitation on the real
-         * device but in practice there is no reason for a guest to access
-         * this device unaligned.
-         */
-        .min_access_size = 4,
-        .max_access_size = 4,
-        .unaligned = false,
-    },
-};
-
 static void hercules_mibadc_realize(DeviceState *dev, Error **errp)
 {
     HerculesMibAdcState *s = HERCULES_MIBADC(dev);
     SysBusDevice *sbd = SYS_BUS_DEVICE(dev);
+    Object *obj = OBJECT(dev);
+    HerculesState *parent = HERCULES_SOC(obj->parent);
+
+    static MemoryRegionOps hercules_mibadc_ecc_ops = {
+        .read = hercules_mibadc_ecc_read,
+        .write = hercules_mibadc_ecc_write,
+        .endianness = DEVICE_LITTLE_ENDIAN,
+        .impl = {
+            /*
+             * Our device would not work correctly if the guest was doing
+             * unaligned access. This might not be a limitation on the real
+             * device but in practice there is no reason for a guest to access
+             * this device unaligned.
+             */
+            .min_access_size = 4,
+            .max_access_size = 4,
+            .unaligned = false,
+        },
+    };
+
+    static MemoryRegionOps hercules_mibadc_ram_ops = {
+        .read = hercules_mibadc_ram_read,
+        .write = hercules_mibadc_ram_write,
+        .endianness = DEVICE_LITTLE_ENDIAN,
+        .impl = {
+            /*
+             * Our device would not work correctly if the guest was doing
+             * unaligned access. This might not be a limitation on the real
+             * device but in practice there is no reason for a guest to access
+             * this device unaligned.
+             */
+            .min_access_size = 4,
+            .max_access_size = 4,
+            .unaligned = false,
+        },
+    };
+
+    static MemoryRegionOps hercules_mibadc_ops = {
+        .read = hercules_mibadc_read,
+        .write = hercules_mibadc_write,
+        .endianness = DEVICE_LITTLE_ENDIAN,
+        .impl = {
+            /*
+             * Our device would not work correctly if the guest was doing
+             * unaligned access. This might not be a limitation on the real
+             * device but in practice there is no reason for a guest to access
+             * this device unaligned.
+             */
+            .min_access_size = 4,
+            .max_access_size = 4,
+            .unaligned = false,
+        },
+    };
+
+    if (parent->is_tms570)
+    {
+        hercules_mibadc_ecc_ops.endianness = DEVICE_BIG_ENDIAN;
+        hercules_mibadc_ram_ops.endianness = DEVICE_BIG_ENDIAN;
+        hercules_mibadc_ops.endianness = DEVICE_BIG_ENDIAN;
+    }
 
     memory_region_init_io(&s->regs, OBJECT(dev), &hercules_mibadc_ops, s,
                           TYPE_HERCULES_MIBADC ".regs",

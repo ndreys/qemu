@@ -35,7 +35,7 @@ static void hercules_rtp_write(void *opaque, hwaddr offset, uint64_t value,
 static const MemoryRegionOps hercules_rtp_ops = {
     .read = hercules_rtp_read,
     .write = hercules_rtp_write,
-    .endianness = DEVICE_BIG_ENDIAN,
+    .endianness = DEVICE_NATIVE_ENDIAN,
 };
 
 static void hercules_rtp_init(Object *obj)

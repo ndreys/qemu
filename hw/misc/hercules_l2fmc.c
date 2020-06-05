@@ -15,6 +15,7 @@
 #include "sysemu/sysemu.h"
 
 #include "hw/misc/hercules_l2fmc.h"
+#include "hw/arm/hercules.h"
 
 enum {
     HERCULES_L2FMC_SIZE       = 4 * 1024,
@@ -124,23 +125,6 @@ static void hercules_epc_write(void *opaque, hwaddr offset,
     }
 }
 
-static const MemoryRegionOps hercules_epc_ops = {
-    .read = hercules_epc_read,
-    .write = hercules_epc_write,
-    .endianness = DEVICE_BIG_ENDIAN,
-    .impl = {
-        /*
-         * Our device would not work correctly if the guest was doing
-         * unaligned access. This might not be a limitation on the real
-         * device but in practice there is no reason for a guest to access
-         * this device unaligned.
-         */
-        .min_access_size = 4,
-        .max_access_size = 4,
-        .unaligned = false,
-    },
-};
-
 static uint64_t hercules_l2fmc_read(void *opaque, hwaddr offset,
                                   unsigned size)
 {
@@ -245,29 +229,54 @@ static void hercules_l2fmc_write(void *opaque, hwaddr offset,
     }
 }
 
-static const MemoryRegionOps hercules_l2fmc_ops = {
-    .read = hercules_l2fmc_read,
-    .write = hercules_l2fmc_write,
-    .endianness = DEVICE_BIG_ENDIAN,
-    .impl = {
-        /*
-         * Our device would not work correctly if the guest was doing
-         * unaligned access. This might not be a limitation on the real
-         * device but in practice there is no reason for a guest to access
-         * this device unaligned.
-         */
-        .min_access_size = 4,
-        .max_access_size = 4,
-        .unaligned = false,
-    },
-};
-
 static void hercules_l2fmc_realize(DeviceState *dev, Error **errp)
 {
     HerculesL2FMCState *s = HERCULES_L2FMC(dev);
     SysBusDevice *sbd = SYS_BUS_DEVICE(dev);
+    Object *obj = OBJECT(dev);
+    HerculesState *parent = HERCULES_SOC(obj->parent);
 
-    memory_region_init_io(&s->iomem, OBJECT(dev), &hercules_l2fmc_ops,
+    static MemoryRegionOps hercules_epc_ops = {
+        .read = hercules_epc_read,
+        .write = hercules_epc_write,
+        .endianness = DEVICE_LITTLE_ENDIAN,
+        .impl = {
+            /*
+             * Our device would not work correctly if the guest was doing
+             * unaligned access. This might not be a limitation on the real
+             * device but in practice there is no reason for a guest to access
+             * this device unaligned.
+             */
+            .min_access_size = 4,
+            .max_access_size = 4,
+            .unaligned = false,
+        },
+    };
+
+    static MemoryRegionOps hercules_l2fmc_ops = {
+        .read = hercules_l2fmc_read,
+        .write = hercules_l2fmc_write,
+        .endianness = DEVICE_LITTLE_ENDIAN,
+        .impl = {
+            /*
+             * Our device would not work correctly if the guest was doing
+             * unaligned access. This might not be a limitation on the real
+             * device but in practice there is no reason for a guest to access
+             * this device unaligned.
+             */
+            .min_access_size = 4,
+            .max_access_size = 4,
+            .unaligned = false,
+        },
+    };
+
+    if (parent->is_tms570)
+    {
+        hercules_epc_ops.endianness = DEVICE_BIG_ENDIAN;
+        hercules_l2fmc_ops.endianness = DEVICE_BIG_ENDIAN;
+    }
+
+    memory_region_init_io(&s->iomem, obj, &hercules_l2fmc_ops,
                           s, TYPE_HERCULES_L2FMC ".io", HERCULES_L2FMC_SIZE);
     sysbus_init_mmio(sbd, &s->iomem);
 
@@ -280,7 +289,7 @@ static void hercules_l2fmc_realize(DeviceState *dev, Error **errp)
      * for it involves flash controller so dealing with it here
      * simplifies things
      */
-    memory_region_init_io(&s->epc, OBJECT(dev), &hercules_epc_ops,
+    memory_region_init_io(&s->epc, obj, &hercules_epc_ops,
                           s, TYPE_HERCULES_L2FMC ".epc", HERCULES_EPC_SIZE);
     sysbus_init_mmio(sbd, &s->epc);
 

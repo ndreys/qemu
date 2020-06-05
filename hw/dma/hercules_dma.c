@@ -14,6 +14,7 @@
 #include "trace.h"
 
 #include "hw/dma/hercules_dma.h"
+#include "hw/arm/hercules.h"
 
 #define qemu_log_bad_offset(offset) \
     qemu_log_mask(LOG_GUEST_ERROR, "%s: Bad offset %" HWADDR_PRIx "\n", \
@@ -285,56 +286,6 @@ static uint64_t hercules_dma_ram_wcp_read(void *opaque, hwaddr offset,
     return 0;
 }
 
-static const MemoryRegionOps hercules_dma_ops = {
-    .read = hercules_dma_read,
-    .write = hercules_dma_write,
-    .endianness = DEVICE_BIG_ENDIAN,
-    .impl = {
-        /*
-         * Our device would not work correctly if the guest was doing
-         * unaligned access. This might not be a limitation on the real
-         * device but in practice there is no reason for a guest to access
-         * this device unaligned.
-         */
-        .min_access_size = 4,
-        .max_access_size = 4,
-        .unaligned = false,
-    },
-};
-
-static const MemoryRegionOps hercules_dma_ram_pcp_ops = {
-    .read = hercules_dma_ram_pcp_read,
-    .write = hercules_dma_ram_pcp_write,
-    .endianness = DEVICE_BIG_ENDIAN,
-    .impl = {
-        /*
-         * Our device would not work correctly if the guest was doing
-         * unaligned access. This might not be a limitation on the real
-         * device but in practice there is no reason for a guest to access
-         * this device unaligned.
-         */
-        .min_access_size = 4,
-        .max_access_size = 4,
-        .unaligned = false,
-    },
-};
-
-static const MemoryRegionOps hercules_dma_ram_wcp_ops = {
-    .read = hercules_dma_ram_wcp_read,
-    .endianness = DEVICE_BIG_ENDIAN,
-    .impl = {
-        /*
-         * Our device would not work correctly if the guest was doing
-         * unaligned access. This might not be a limitation on the real
-         * device but in practice there is no reason for a guest to access
-         * this device unaligned.
-         */
-        .min_access_size = 4,
-        .max_access_size = 4,
-        .unaligned = false,
-    },
-};
-
 static void hercules_dma_reset(DeviceState *d)
 {
     HerculesDMAState *s = HERCULES_DMA(d);
@@ -377,7 +328,66 @@ static void hercules_dma_realize(DeviceState *dev, Error **errp)
 {
     HerculesDMAState *s = HERCULES_DMA(dev);
     SysBusDevice *sbd = SYS_BUS_DEVICE(dev);
+    Object *obj = OBJECT(dev);
+    HerculesState *parent = HERCULES_SOC(obj->parent);
     int i;
+
+    static MemoryRegionOps hercules_dma_ops = {
+        .read = hercules_dma_read,
+        .write = hercules_dma_write,
+        .endianness = DEVICE_LITTLE_ENDIAN,
+        .impl = {
+            /*
+             * Our device would not work correctly if the guest was doing
+             * unaligned access. This might not be a limitation on the real
+             * device but in practice there is no reason for a guest to access
+             * this device unaligned.
+             */
+            .min_access_size = 4,
+            .max_access_size = 4,
+            .unaligned = false,
+        },
+    };
+
+    static MemoryRegionOps hercules_dma_ram_pcp_ops = {
+        .read = hercules_dma_ram_pcp_read,
+        .write = hercules_dma_ram_pcp_write,
+        .endianness = DEVICE_LITTLE_ENDIAN,
+        .impl = {
+            /*
+             * Our device would not work correctly if the guest was doing
+             * unaligned access. This might not be a limitation on the real
+             * device but in practice there is no reason for a guest to access
+             * this device unaligned.
+             */
+            .min_access_size = 4,
+            .max_access_size = 4,
+            .unaligned = false,
+        },
+    };
+
+    static MemoryRegionOps hercules_dma_ram_wcp_ops = {
+        .read = hercules_dma_ram_wcp_read,
+        .endianness = DEVICE_LITTLE_ENDIAN,
+        .impl = {
+            /*
+             * Our device would not work correctly if the guest was doing
+             * unaligned access. This might not be a limitation on the real
+             * device but in practice there is no reason for a guest to access
+             * this device unaligned.
+             */
+            .min_access_size = 4,
+            .max_access_size = 4,
+            .unaligned = false,
+        },
+    };
+
+    if (parent->is_tms570)
+    {
+        hercules_dma_ops.endianness = DEVICE_BIG_ENDIAN;
+        hercules_dma_ram_pcp_ops.endianness = DEVICE_BIG_ENDIAN;
+        hercules_dma_ram_wcp_ops.endianness = DEVICE_BIG_ENDIAN;
+    }
 
     memory_region_init_io(&s->iomem, OBJECT(dev), &hercules_dma_ops,
                           s, TYPE_HERCULES_DMA ".io", HERCULES_DMA_SIZE);

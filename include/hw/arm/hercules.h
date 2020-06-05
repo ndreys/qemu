@@ -10,7 +10,6 @@
 
 #include "qemu/osdep.h"
 #include "hw/arm/boot.h"
-#include "cpu.h"
 #include "hw/misc/hercules_l2ramw.h"
 #include "hw/char/hercules_rtp.h"
 #include "hw/intc/hercules_vim.h"
@@ -40,6 +39,8 @@ enum HerculesConfiguration {
     HERCULES_NUM_ECAPS = 6,
 };
 
+struct ARMCPU;
+
 typedef struct HerculesState {
     /*< private >*/
     DeviceState parent_obj;
@@ -50,7 +51,7 @@ typedef struct HerculesState {
     bool is_tms570;
     /* end properties */
 
-    ARMCPU cpu;
+    struct ARMCPU* cpu;
     HerculesL2RamwState l2ramw;
     HerculesRTPState rtp;
 

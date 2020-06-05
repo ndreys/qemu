@@ -13,6 +13,7 @@
 #include "qapi/error.h"
 
 #include "hw/misc/hercules_l2ramw.h"
+#include "hw/arm/hercules.h"
 
 enum {
     HERCULES_L2RAMW_CONTAINER_SIZE = 8 * 1024 * 1024,
@@ -125,17 +126,6 @@ static uint64_t hercules_l2ramw_read(void *opaque, hwaddr offset,
     return 0;
 }
 
-static const MemoryRegionOps hercules_l2ramw_ops = {
-    .read       = hercules_l2ramw_read,
-    .write      = hercules_l2ramw_write,
-    .endianness = DEVICE_BIG_ENDIAN,
-    .impl = {
-        .min_access_size = 4,
-        .max_access_size = 4,
-        .unaligned = false,
-    },
-};
-
 static void hercules_l2ramw_ecc_write(void *opaque, hwaddr offset,
                                       uint64_t val, unsigned size)
 {
@@ -149,31 +139,50 @@ static uint64_t hercules_l2ramw_ecc_read(void *opaque, hwaddr offset,
     return 0;
 }
 
-static const MemoryRegionOps hercules_l2ramw_ecc_ops = {
-    .read       = hercules_l2ramw_ecc_read,
-    .write      = hercules_l2ramw_ecc_write,
-    .endianness = DEVICE_BIG_ENDIAN,
-    .impl = {
-        .min_access_size = 4,
-        .max_access_size = 4,
-        .unaligned = false,
-    },
-};
-
 static void hercules_l2ramw_realize(DeviceState *dev, Error **errp)
 {
     HerculesL2RamwState *s = HERCULES_L2RAMW(dev);
     SysBusDevice *sbd = SYS_BUS_DEVICE(dev);
+    Object *obj = OBJECT(dev);
+    HerculesState *parent = HERCULES_SOC(obj->parent);
 
-    memory_region_init_io(&s->io.ecc, OBJECT(dev), &hercules_l2ramw_ecc_ops, s,
+    static MemoryRegionOps hercules_l2ramw_ops = {
+        .read       = hercules_l2ramw_read,
+        .write      = hercules_l2ramw_write,
+        .endianness = DEVICE_LITTLE_ENDIAN,
+        .impl = {
+            .min_access_size = 4,
+            .max_access_size = 4,
+            .unaligned = false,
+        },
+    };
+
+    static MemoryRegionOps hercules_l2ramw_ecc_ops = {
+        .read       = hercules_l2ramw_ecc_read,
+        .write      = hercules_l2ramw_ecc_write,
+        .endianness = DEVICE_LITTLE_ENDIAN,
+        .impl = {
+            .min_access_size = 4,
+            .max_access_size = 4,
+            .unaligned = false,
+        },
+    };
+
+    if (parent->is_tms570)
+    {
+        hercules_l2ramw_ops.endianness = DEVICE_BIG_ENDIAN;
+        hercules_l2ramw_ecc_ops.endianness = DEVICE_BIG_ENDIAN;
+    }
+
+    memory_region_init_io(&s->io.ecc, obj, &hercules_l2ramw_ecc_ops, s,
                           TYPE_HERCULES_L2RAMW ".io.ecc",
                           HERCULES_L2RAMW_ECC_SIZE);
 
-    memory_region_init_ram(&s->io.sram, OBJECT(dev),
+    memory_region_init_ram(&s->io.sram, obj,
                            TYPE_HERCULES_L2RAMW ".io.sram",
                            HERCULES_L2RAMW_SRAM_SIZE, &error_fatal);
 
-    memory_region_init(&s->io.container, OBJECT(dev),
+    memory_region_init(&s->io.container, obj,
                        TYPE_HERCULES_L2RAMW ".io",
                        HERCULES_L2RAMW_CONTAINER_SIZE);
 
@@ -184,7 +193,7 @@ static void hercules_l2ramw_realize(DeviceState *dev, Error **errp)
 
     sysbus_init_mmio(sbd, &s->io.container);
 
-    memory_region_init_io(&s->io.regs, OBJECT(dev), &hercules_l2ramw_ops, s,
+    memory_region_init_io(&s->io.regs, obj, &hercules_l2ramw_ops, s,
                           TYPE_HERCULES_L2RAMW ".io.regs",
                           HERCULES_L2RAMW_SIZE);
 

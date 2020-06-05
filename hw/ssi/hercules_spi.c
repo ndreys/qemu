@@ -11,10 +11,10 @@
 #include "qemu/log.h"
 #include "qemu/main-loop.h"
 #include "qapi/error.h"
-
 #include "sysemu/dma.h"
 
 #include "hw/ssi/hercules_spi.h"
+#include "hw/arm/hercules.h"
 
 #define qemu_log_bad_offset(offset) \
     qemu_log_mask(LOG_GUEST_ERROR, "%s: Bad offset %" HWADDR_PRIx "\n", \
@@ -596,54 +596,62 @@ static void hercules_spi_set_spiena(void *opaque, int req, int level)
     }
 }
 
-static const MemoryRegionOps hercules_spi_rxram_ops = {
-    .read = hercules_spi_rxram_read,
-    .write = hercules_spi_rxram_write,
-    .endianness = DEVICE_NATIVE_ENDIAN,
-    .impl = {
-        /*
-         * Our device would not work correctly if the guest was doing
-         * unaligned access. This might not be a limitation on the real
-         * device but in practice there is no reason for a guest to access
-         * this device unaligned.
-         */
-        .min_access_size = 1,
-        .max_access_size = 4,
-        .unaligned = true,
-    },
-};
-
-static const MemoryRegionOps hercules_spi_ops = {
-    .read       = hercules_spi_read,
-    .write      = hercules_spi_write,
-    .endianness = DEVICE_BIG_ENDIAN,
-    .impl = {
-        .min_access_size = 2,
-        .max_access_size = 4,
-        .unaligned = false,
-    },
-};
-
 static void hercules_spi_realize(DeviceState *dev, Error **errp)
 {
     HerculesMibSpiState *s = HERCULES_SPI(dev);
     SysBusDevice *sbd = SYS_BUS_DEVICE(dev);
+    Object *obj = OBJECT(dev);
+    HerculesState *parent = HERCULES_SOC(obj->parent);
+
     int i;
 
-    memory_region_init_io(&s->io.regs, OBJECT(dev), &hercules_spi_ops, s,
+    static MemoryRegionOps hercules_spi_rxram_ops = {
+        .read = hercules_spi_rxram_read,
+        .write = hercules_spi_rxram_write,
+        .endianness = DEVICE_NATIVE_ENDIAN,
+        .impl = {
+            /*
+             * Our device would not work correctly if the guest was doing
+             * unaligned access. This might not be a limitation on the real
+             * device but in practice there is no reason for a guest to access
+             * this device unaligned.
+             */
+            .min_access_size = 1,
+            .max_access_size = 4,
+            .unaligned = true,
+        },
+    };
+
+    static MemoryRegionOps hercules_spi_ops = {
+        .read       = hercules_spi_read,
+        .write      = hercules_spi_write,
+        .endianness = DEVICE_LITTLE_ENDIAN,
+        .impl = {
+            .min_access_size = 2,
+            .max_access_size = 4,
+            .unaligned = false,
+        },
+    };
+
+    if (parent->is_tms570)
+    {
+        hercules_spi_ops.endianness = DEVICE_BIG_ENDIAN;
+    }
+
+    memory_region_init_io(&s->io.regs, obj, &hercules_spi_ops, s,
                           TYPE_HERCULES_SPI ".io", HERCULES_SPI_SIZE);
     sysbus_init_mmio(sbd, &s->io.regs);
 
-    memory_region_init_ram_ptr(&s->io.txram, OBJECT(dev),
+    memory_region_init_ram_ptr(&s->io.txram, obj,
                                TYPE_HERCULES_SPI ".ram.tx",
                                sizeof(s->txram), s->txram);
 
-    memory_region_init_io(&s->io.rxram, OBJECT(dev),
+    memory_region_init_io(&s->io.rxram, obj,
                           &hercules_spi_rxram_ops,
                           s, TYPE_HERCULES_SPI ".ram.rx",
                           sizeof(s->rxram));
 
-    memory_region_init(&s->io.ram, OBJECT(dev),
+    memory_region_init(&s->io.ram, obj,
                        TYPE_HERCULES_SPI ".ram",
                        sizeof(s->txram) +
                        sizeof(s->rxram));

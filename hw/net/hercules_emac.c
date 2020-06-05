@@ -15,6 +15,7 @@
 #include "sysemu/dma.h"
 
 #include "hw/net/hercules_emac.h"
+#include "hw/arm/hercules.h"
 
 typedef struct QEMU_PACKED HerculesCppiDescriptor {
     uint32_t next;
@@ -534,40 +535,6 @@ static void emac_reset(DeviceState *d)
     memset(s->rxcp,    0, sizeof(s->rxcp));
 }
 
-static const MemoryRegionOps hercules_emac_module_ops = {
-    .read = hercules_emac_module_read,
-    .write = hercules_emac_module_write,
-    .endianness = DEVICE_BIG_ENDIAN,
-    .impl = {
-        /*
-         * Our device would not work correctly if the guest was doing
-         * unaligned access. This might not be a limitation on the real
-         * device but in practice there is no reason for a guest to access
-         * this device unaligned.
-         */
-        .min_access_size = 4,
-        .max_access_size = 4,
-        .unaligned = false,
-    },
-};
-
-static const MemoryRegionOps hercules_emac_contrl_ops = {
-    .read = hercules_emac_control_read,
-    .write = hercules_emac_control_write,
-    .endianness = DEVICE_BIG_ENDIAN,
-    .impl = {
-        /*
-         * Our device would not work correctly if the guest was doing
-         * unaligned access. This might not be a limitation on the real
-         * device but in practice there is no reason for a guest to access
-         * this device unaligned.
-         */
-        .min_access_size = 4,
-        .max_access_size = 4,
-        .unaligned = false,
-    },
-};
-
 static NetClientInfo net_emac_info = {
     .type = NET_CLIENT_DRIVER_NIC,
     .size = sizeof(NICState),
@@ -580,7 +547,49 @@ static void hercules_emac_realize(DeviceState *dev, Error **errp)
 {
     HerculesEmacState *s = HERCULES_EMAC(dev);
     SysBusDevice *sbd = SYS_BUS_DEVICE(dev);
+    Object *obj = OBJECT(dev);
+    HerculesState *parent = HERCULES_SOC(obj->parent);
     MemoryRegion *io;
+
+    static MemoryRegionOps hercules_emac_module_ops = {
+        .read = hercules_emac_module_read,
+        .write = hercules_emac_module_write,
+        .endianness = DEVICE_LITTLE_ENDIAN,
+        .impl = {
+            /*
+             * Our device would not work correctly if the guest was doing
+             * unaligned access. This might not be a limitation on the real
+             * device but in practice there is no reason for a guest to access
+             * this device unaligned.
+             */
+            .min_access_size = 4,
+            .max_access_size = 4,
+            .unaligned = false,
+        },
+    };
+
+    static MemoryRegionOps hercules_emac_control_ops = {
+        .read = hercules_emac_control_read,
+        .write = hercules_emac_control_write,
+        .endianness = DEVICE_LITTLE_ENDIAN,
+        .impl = {
+            /*
+             * Our device would not work correctly if the guest was doing
+             * unaligned access. This might not be a limitation on the real
+             * device but in practice there is no reason for a guest to access
+             * this device unaligned.
+             */
+            .min_access_size = 4,
+            .max_access_size = 4,
+            .unaligned = false,
+        },
+    };
+
+    if (parent->is_tms570)
+    {
+        hercules_emac_module_ops.endianness = DEVICE_BIG_ENDIAN;
+        hercules_emac_control_ops.endianness = DEVICE_BIG_ENDIAN;
+    }
 
     /*
      * Init controller mmap'd interface
@@ -588,12 +597,12 @@ static void hercules_emac_realize(DeviceState *dev, Error **errp)
      * 0x800 - 0x900 : ctrl
      * 0x900 - 0xA00 : mdio
      */
-    memory_region_init_io(&s->module, OBJECT(dev), &hercules_emac_module_ops,
+    memory_region_init_io(&s->module, obj, &hercules_emac_module_ops,
                           s, TYPE_HERCULES_EMAC ".io.module",
                           HERCULES_EMAC_MODULE_SIZE);
     sysbus_init_mmio(sbd, &s->module);
 
-    memory_region_init_io(&s->control, OBJECT(dev), &hercules_emac_contrl_ops,
+    memory_region_init_io(&s->control, obj, &hercules_emac_control_ops,
                           s, TYPE_HERCULES_EMAC ".io.control",
                           HERCULES_EMAC_CONTROL_SIZE);
     sysbus_init_mmio(sbd, &s->control);
@@ -606,7 +615,7 @@ static void hercules_emac_realize(DeviceState *dev, Error **errp)
     io = sysbus_mmio_get_region(SYS_BUS_DEVICE(&s->mdio), 0);
     sysbus_init_mmio(sbd, io);
 
-    memory_region_init_ram(&s->ram, OBJECT(dev),
+    memory_region_init_ram(&s->ram, obj,
                            TYPE_HERCULES_EMAC ".cppi-ram",
                            HERCULES_CPPI_RAM_SIZE, &error_fatal);
     sysbus_init_mmio(sbd, &s->ram);
@@ -614,7 +623,7 @@ static void hercules_emac_realize(DeviceState *dev, Error **errp)
     qemu_macaddr_default_if_unset(&s->conf.macaddr);
 
     s->nic = qemu_new_nic(&net_emac_info, &s->conf,
-                          object_get_typename(OBJECT(dev)),
+                          object_get_typename(obj),
                           dev->id, s);
     qemu_format_nic_info_str(qemu_get_queue(s->nic), s->conf.macaddr.a);
 }
