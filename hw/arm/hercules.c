@@ -8,44 +8,26 @@
 #include "qemu/osdep.h"
 #include "qapi/error.h"
 #include "qemu-common.h"
+#include "chardev/char-fe.h"
 #include "cpu.h"
-#include "qemu/error-report.h"
+#include "elf.h"
+#include "exec/address-spaces.h"
 #include "hw/arm/boot.h"
 #include "hw/arm/hercules.h"
 #include "hw/boards.h"
+#include "hw/loader.h"
 #include "hw/sysbus.h"
 #include "net/net.h"
-#include "exec/address-spaces.h"
-#include "chardev/char-fe.h"
+#include "qemu/error-report.h"
 #include "sysemu/reset.h"
 #include "sysemu/sysemu.h"
-#include "qemu/error-report.h"
-#include "hw/loader.h"
 #include "sysemu/block-backend.h"
+#include "sysemu/qtest.h"
 
-typedef struct QEMU_PACKED HerculesOTPSensorCalibrationData {
-    uint16_t temp1val;
-    uint16_t temp1;
-    uint16_t temp2val;
-    uint16_t temp2;
-    uint16_t temp3val;
-    uint16_t temp3;
-    uint32_t reserved;
-} HerculesOTPSensorCalibrationData;
 
-typedef struct QEMU_PACKED HerculesOTPData {
-    uint32_t bank0_sector_info;
-    uint32_t bank0_package_memory_info;
-    uint32_t __reserved1[21];
-    uint32_t lpo_trim_max_gclk;
-    uint32_t __reserved2[10];
-    uint8_t  part_number[32];
-    uint32_t __reserved3[68];
-    HerculesOTPSensorCalibrationData die_temp_sensor[3];
-    uint32_t __reserved4[44];
-    uint32_t single_bit_ecc[2];
-    uint32_t double_bit_ecc[2];
-} HerculesOTPData;
+#ifdef HOST_WORDS_BIGENDIAN
+#pragma message "Hercules emulation not tested on Big Endian hosts"
+#endif
 
 static const int
 HERCULES_MIBSPIn_DMAREQ[HERCULES_NUM_MIBSPIS][HERCULES_SPI_NUM_DMAREQS] = {
@@ -91,13 +73,6 @@ static void hercules_initfn(Object *obj)
                       ARM_CPU_TYPE_NAME("cortex-r5f"));
 
     object_property_add_child(obj, "cpu", cpu_obj);
-
-    s->cpu.ctr = 0x1d192992; /* 32K icache 32K dcache */
-
-    set_feature(&s->cpu.env, ARM_FEATURE_DUMMY_C15_REGS);
-
-    object_property_set_bool(cpu_obj, true, "cfgend", &error_fatal);
-    object_property_set_bool(cpu_obj, true, "cfgend-instr", &error_fatal);
 
     sysbus_init_child_obj(obj, "l2ramw", &s->l2ramw, sizeof(s->l2ramw),
                           TYPE_HERCULES_L2RAMW);
@@ -174,15 +149,23 @@ static void hercules_cpu_reset(void *opaque)
 static void hercules_realize(DeviceState *dev, Error **errp)
 {
     HerculesState *s = HERCULES_SOC(dev);
+    Object *cpu_obj = OBJECT(&s->cpu);
     MemoryRegion *system_memory = get_system_memory();
     MemoryRegion *flash = g_new(MemoryRegion, 1);
     MemoryRegion *eeprom = g_new(MemoryRegion, 1);
     MemoryRegion *otp_bank1 = g_new(MemoryRegion, 1);
-    uint8_t *otp_bank1_data;
     SysBusDevice *sbd;
     DeviceState *vim, *dma, *esm;
     qemu_irq irq, error;
     int i;
+
+    s->cpu.ctr = 0x1d192992; /* 32K icache 32K dcache */
+    set_feature(&s->cpu.env, ARM_FEATURE_DUMMY_C15_REGS);
+
+    if (s->is_tms570) {
+        object_property_set_bool(cpu_obj, true, "cfgend", &error_fatal);
+        object_property_set_bool(cpu_obj, true, "cfgend-instr", &error_fatal);
+    }
 
     object_property_set_bool(OBJECT(&s->cpu), true, "realized", &error_fatal);
     qemu_register_reset(hercules_cpu_reset, ARM_CPU(&s->cpu));
@@ -303,80 +286,10 @@ static void hercules_realize(DeviceState *dev, Error **errp)
     error = qdev_get_gpio_in(esm, HERCULES_EPC_CORRECTABLE_ERROR);
     sysbus_connect_irq(sbd, 2, error);
 
-    otp_bank1_data = g_new0(uint8_t, HERCULES_OTP_BANK1_SIZE);
-    if (0) {
-        /*
-         * Handle loading OTP1 from a custom file here
-         */
-    } else {
-        /*
-         * FIXME: Convenience workaround, should eventually be removed
-         * once loading from custom file is implemented
-         */
-        const HerculesOTPData dummy_otp = {
-            .bank0_sector_info = htobe32(0x00108303),
-            .bank0_package_memory_info = htobe32(0x01511000U),
-
-            .lpo_trim_max_gclk = htobe32(0x0F201611),
-
-            .part_number = {
-                0x52, 0x4D, 0x35, 0x37,
-                0x4c, 0x38, 0x34, 0x33,
-                0x42, 0x5a, 0x57, 0x54,
-                0x54, 0x00, 0x00, 0x00,
-                0x00, 0x00, 0x00, 0x00,
-                0x00, 0x00, 0x00, 0x00,
-                0x00, 0x00, 0x00, 0x00,
-                0x00, 0x00, 0x00, 0x00,
-            },
-
-            .die_temp_sensor = {
-                [0] = {
-                    .temp1    = htobe16(0x012F),
-                    .temp1val = htobe16(0x0762),
-                    .temp2    = htobe16(0x00E9),
-                    .temp2val = htobe16(0x05A5),
-                    .temp3    = htobe16(0x018E),
-                    .temp3val = htobe16(0x09A6),
-                    .reserved = 0xFFFFFFFF,
-                },
-                [1] = {
-                    .temp1    = htobe16(0x012F),
-                    .temp1val = htobe16(0x07A8),
-                    .temp2    = htobe16(0x00E9),
-                    .temp2val = htobe16(0x0613U),
-                    .temp3    = htobe16(0x018E),
-                    .temp3val = htobe16(0x09D4),
-                    .reserved = 0xFFFFFFFFUL,
-                },
-                [2] = {
-                    .temp1    = htobe16(0x012F),
-                    .temp1val = htobe16(0x0750),
-                    .temp2    = htobe16(0x00E9),
-                    .temp2val = htobe16(0x058E),
-                    .temp3    = htobe16(0x018E),
-                    .temp3val = htobe16(0x099D),
-                    .reserved = 0xFFFFFFFFUL,
-                },
-            },
-
-            .single_bit_ecc = {
-                htobe32(0x12345678),
-                htobe32(0x9ABCDEF0)
-            },
-            .double_bit_ecc = {
-                htobe32(0x123C5478),
-                htobe32(0x9ABCDEF2)
-            },
-        };
-
-        memcpy(otp_bank1_data + 0x158, &dummy_otp, sizeof(dummy_otp));
-    }
-
-    memory_region_init_ram_ptr(otp_bank1, OBJECT(dev),
-                               TYPE_HERCULES_SOC ".otp.bank1",
-                               HERCULES_OTP_BANK1_SIZE,
-                               otp_bank1_data);
+    memory_region_init_rom(otp_bank1, OBJECT(dev),
+                           TYPE_HERCULES_SOC ".otp.bank1",
+                           HERCULES_OTP_BANK1_SIZE,
+                           &error_fatal);
     memory_region_add_subregion(system_memory,
                                 HERCULES_OTP_BANK1_ADDR, otp_bank1);
 
@@ -618,10 +531,16 @@ static void hercules_realize(DeviceState *dev, Error **errp)
     sysbus_connect_irq(sbd, 2, error);
     error = qdev_get_gpio_in(esm, HERCULES_CCMR5F_SELF_TEST_ERROR);
     sysbus_connect_irq(sbd, 3, error);
+
+#ifdef HOST_WORDS_BIGENDIAN
+    error_setg(errp, "failed realize on big endian host");
+    return;
+#endif
 }
 
 static Property hercules_properties[] = {
     DEFINE_PROP_DRIVE("eeprom", HerculesState, blk_eeprom),
+    DEFINE_PROP_BOOL("tms570", HerculesState, is_tms570, true),
     DEFINE_PROP_END_OF_LIST(),
 };
 
@@ -650,3 +569,75 @@ static void hercules_register_types(void)
     type_register_static(&hercules_type_info);
 }
 type_init(hercules_register_types)
+
+static void hercules_xx57_init(MachineState *machine, bool is_tms570)
+{
+    Object *dev;
+    MemoryRegion *sdram = g_new(MemoryRegion, 1);
+    DriveInfo *eeprom = drive_get(IF_MTD, 0, 0);
+    const char *file;
+
+    dev = object_new(TYPE_HERCULES_SOC);
+    qdev_prop_set_drive(DEVICE(dev), "eeprom",
+                        eeprom ? blk_by_legacy_dinfo(eeprom) : NULL,
+                        &error_abort);
+    object_property_set_bool(dev, is_tms570, "tms570", &error_fatal);
+    object_property_set_bool(dev, true, "realized", &error_fatal);
+
+    memory_region_init_ram(sdram, OBJECT(dev), "hercules.sdram",
+                           0x00800000, &error_fatal);
+    memory_region_add_subregion(get_system_memory(), HERCULES_EMIF_CS1_ADDR,
+                                sdram);
+
+    if (qtest_enabled()) {
+        return;
+    }
+
+    if (machine->kernel_filename) {
+        uint64_t e, l;
+
+        file = machine->kernel_filename;
+        if (load_elf(file, NULL, NULL, NULL, &e, &l, NULL, NULL,
+                     1, EM_ARM, 1, 0) < 0) {
+            goto exit;
+        }
+    } else if (machine->firmware) {
+        file = machine->firmware;
+        if (load_image_targphys(file, HERCULES_FLASH_ADDR,
+                                HERCULES_FLASH_SIZE) < 0) {
+            goto exit;
+        }
+    }
+
+    return;
+exit:
+    error_report("Could not load '%s'", file);
+    exit(1);
+}
+
+static void tms570lc43_init(MachineState *machine)
+{
+    hercules_xx57_init(machine, true);
+}
+
+static void rm57l843_init(MachineState *machine)
+{
+    hercules_xx57_init(machine, false);
+}
+
+static void tms570lc43_machine_init(MachineClass *mc)
+{
+    mc->desc = "Texas Instruments Hercules TMS570LC43";
+    mc->init = tms570lc43_init;
+    mc->max_cpus = 1;
+}
+
+static void rm57l843_machine_init(MachineClass *mc)
+{
+    mc->desc = "Texas Instruments Hercules RM57L843";
+    mc->init = rm57l843_init;
+    mc->max_cpus = 1;
+}
+
+DEFINE_MACHINE("tms570lc43", tms570lc43_machine_init)
+DEFINE_MACHINE("rm57l843", rm57l843_machine_init)

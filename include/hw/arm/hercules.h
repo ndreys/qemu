@@ -45,7 +45,10 @@ typedef struct HerculesState {
     DeviceState parent_obj;
     /*< public >*/
 
+    /* properties */
     BlockBackend *blk_eeprom;
+    bool is_tms570;
+    /* end properties */
 
     ARMCPU cpu;
     HerculesL2RamwState l2ramw;
