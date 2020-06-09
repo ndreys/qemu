@@ -944,6 +944,7 @@ struct ARMCPU {
      * architecture version.
      */
     bool cfgend;
+    bool cfgend_instr;
 
     QLIST_HEAD(, ARMELChangeHook) pre_el_change_hooks;
     QLIST_HEAD(, ARMELChangeHook) el_change_hooks;
@@ -1181,6 +1182,8 @@ void pmu_init(ARMCPU *cpu);
 #define SCTLR_ATA0    (1ULL << 42) /* v8.5-MemTag */
 #define SCTLR_ATA     (1ULL << 43) /* v8.5-MemTag */
 #define SCTLR_DSSBS   (1ULL << 44) /* v8.5 */
+#define SCTLR_IE      (1U << 31)
+
 
 #define CPTR_TCPAC    (1U << 31)
 #define CPTR_TTA      (1U << 20)
@@ -3155,6 +3158,11 @@ static inline bool arm_cpu_data_is_big_endian_a64(int el, uint64_t sctlr)
     return sctlr & (el ? SCTLR_EE : SCTLR_E0E);
 }
 
+static inline bool arm_sctlr_ie(CPUARMState *env)
+{
+    return env->cp15.sctlr_el[1] & SCTLR_IE;
+}
+
 /* Return true if the processor is in big-endian mode. */
 static inline bool arm_cpu_data_is_big_endian(CPUARMState *env)
 {
@@ -3267,7 +3275,7 @@ static inline int cpu_mmu_index(CPUARMState *env, bool ifetch)
     return FIELD_EX32(env->hflags, TBFLAG_ANY, MMUIDX);
 }
 
-static inline bool bswap_code(bool sctlr_b)
+static inline bool bswap_code(CPUARMState *env)
 {
 #ifdef CONFIG_USER_ONLY
     /* BE8 (SCTLR.B = 0, TARGET_WORDS_BIGENDIAN = 1) is mixed endian.
@@ -3278,12 +3286,12 @@ static inline bool bswap_code(bool sctlr_b)
 #ifdef TARGET_WORDS_BIGENDIAN
         1 ^
 #endif
-        sctlr_b;
+        arm_sctlr_b(env);
 #else
-    /* All code access in ARM is little endian, and there are no loaders
-     * doing swaps that need to be reversed
+    /*
+     * ARMv7-R profile speicifes IE bit to enable instruction swapping
      */
-    return 0;
+    return arm_sctlr_ie(env);
 #endif
 }
 

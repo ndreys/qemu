@@ -44,3 +44,6 @@ pl330_debug_exec_stall(void) "stall of debug instruction not implemented"
 pl330_iomem_write(uint32_t offset, uint32_t value) "addr: 0x%08"PRIx32" data: 0x%08"PRIx32
 pl330_iomem_write_clr(int i) "event interrupt lowered %d"
 pl330_iomem_read(uint32_t addr, uint32_t data) "addr: 0x%08"PRIx32" data: 0x%08"PRIx32
+
+# hercules_dma.c
+hercules_dma_transfer(int channel, int cftcount, int cetcount, uint32_t saddr, unsigned int res, uint32_t daddr, unsigned int wes) "DMA (%d): %d,%d 0x%x(%u) -> 0x%x(%u)"

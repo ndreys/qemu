@@ -964,6 +964,14 @@ F: include/hw/*/nrf51*.h
 F: include/hw/*/microbit*.h
 F: tests/qtest/microbit-test.c
 
+TI Hercules
+M: Benjamin Kamath <kamath.ben@gmail.com>
+M: Andrey Smirnov <andrew.smirnov@gmail.com>
+L: qemu-arm@nongnu.org
+S: Maintained
+F: hw/*/hercules_*
+F: include/hw/*/hercules_*
+
 CRIS Machines
 -------------
 Axis Dev88

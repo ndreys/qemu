@@ -456,6 +456,9 @@ config MSF2
     select SSI
     select UNIMP
 
+config HERCULES
+    bool
+
 config ZAURUS
     bool
     select NAND
